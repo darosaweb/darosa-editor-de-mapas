@@ -19,6 +19,9 @@ veja a prévia em 3D, e um gerador transforma o desenho num **mundo jogável** (
 - **🏠 Nascer aqui**: marca onde os jogadores aparecem no mundo (sem marca, o gerador escolhe a terra firme mais perto do centro).
 - **🏘️ Vila**: marca onde vão ficar as vilas (até 8, longe umas das outras, só em terra). O estilo da vila
   segue o bioma: deserto, savana, taiga, neve ou planície (os demais biomas). Clicar numa vila tira ela.
+- **🕳️ Caverna**: marca uma **entrada de caverna** — uma boca aberta no chão que desce em rampa até os túneis
+  (até 12, em terra firme e longe da água para não inundar).
+- **⛏️ Cavernas**: quantas cavernas haverá embaixo da terra — nenhuma, poucas, normal ou muitas.
 - **Nível do mar** configurável, água preenchida automaticamente.
 - **Prévia 3D** ao vivo (arraste para girar) e mapa 2D por bioma ou por altura.
 - **Modo simples** (botões grandes, poucos biomas) e **modo avançado**.
@@ -95,8 +98,10 @@ JSON compactado com gzip:
 - `biomas` — lista de nomes (`minecraft:forest`…); `biomaGrade` = 1 byte por coluna, índice nessa lista (base64)
 - `alturas` — Int16 little-endian por coluna, linha a linha (z), coluna a coluna (x) (base64): Y do bloco mais alto do terreno
 - `alturasFinas` — Float32, só para continuar editando sem perder suavidade
-- `marcadores` — `{ nascer: {x, z} | null, vilas: [{x, z}] }` em coordenadas do desenho. O gerador converte para
-  coordenadas do mundo e grava em `info.json` o spawn e as vilas (`minecraft:village_<estilo>`).
+- `marcadores` — `{ nascer: {x, z} | null, vilas: [{x, z}], entradas: [{x, z}] }` em coordenadas do desenho.
+  O gerador converte para coordenadas do mundo e grava em `info.json` o spawn, as vilas (`minecraft:village_<estilo>`)
+  e as entradas de caverna.
+- `cavernas` — `nenhuma` | `poucas` | `normal` | `muitas` (quantidade de cavernas no subsolo).
 
 ## Atalhos
 

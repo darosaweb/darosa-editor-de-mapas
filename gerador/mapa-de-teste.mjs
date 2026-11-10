@@ -30,7 +30,14 @@ paint('suavizar', blob(90, 175, 24), { raio: 14, forca: 0.5 });
 paint('rio', line(40, 128, 220, 140, 120), { raio: 6, forca: 0.7 });
 
 // marcadores: nascer perto do centro, uma vila no deserto e uma na selva (vira vila de planície)
-m.markers = { nascer: { x: 128.5, z: 150.5 }, vilas: [{ x: 85.5, z: 85.5 }, { x: 175.5, z: 175.5 }] };
+// e duas entradas de caverna (uma perto do nascimento, outra na montanha de cerejeiras)
+m.markers = {
+  ...m.markers,
+  nascer: { x: 128.5, z: 150.5 },
+  vilas: [{ x: 85.5, z: 85.5 }, { x: 175.5, z: 175.5 }],
+  entradas: [{ x: 140.5, z: 160.5 }, { x: 95.5, z: 168.5 }],
+  cavernas: 'muitas',
+};
 
 const json = JSON.stringify(serialize(m, 'teste-256'));
 writeFileSync(out, gzipSync(json));

@@ -22,11 +22,19 @@ const TOOLS = [
   { id: 'nivelar',  ic: '📏', nome: 'Nivelar',  dica: 'Deixa tudo na mesma altura (a do lugar onde você clicou)' },
   { id: 'nascer',   ic: '🏠', nome: 'Nascer aqui', dica: 'Onde os jogadores aparecem quando entram no mundo' },
   { id: 'vila',     ic: '🏘️', nome: 'Vila',     dica: 'Clique para pôr uma vila; clique numa vila para tirar' },
+  { id: 'entrada',  ic: '🕳️', nome: 'Caverna',  dica: 'Clique para abrir uma entrada de caverna; clique numa entrada para tirar' },
   { id: 'pegar',    ic: '💧', nome: 'Pegar bioma', dica: 'Clique no mapa para escolher o bioma de lá', avancado: true },
 ];
 const CONTINUOUS = new Set(['subir', 'descer', 'montanha', 'suavizar', 'nivelar']);
 const USES_BIOME = new Set(['bioma', 'balde']);
-const MARKER_TOOLS = new Set(['nascer', 'vila']);
+const MARKER_TOOLS = new Set(['nascer', 'vila', 'entrada']);
+const MAX_ENTRADAS = 12;
+const ENTRADA_DIST_MIN = 24;  // blocos entre uma entrada de caverna e outra
+const ENTRADA_AGUA = 8;       // a boca da caverna fica longe da água (para não inundar)
+const CAVERNAS = [
+  { id: 'nenhuma', nome: 'Nenhuma' }, { id: 'poucas', nome: 'Poucas' },
+  { id: 'normal', nome: 'Normal' }, { id: 'muitas', nome: 'Muitas' },
+];
 const MAX_VILAS = 8;
 const VILA_DIST_MIN = 64;     // blocos entre uma vila e outra (cada vila ocupa uns 60–100 blocos)
 const VILA_CLIQUE = 12;       // clicar a menos disso de uma vila tira ela
@@ -145,6 +153,16 @@ function strokeTo(p) {
 
 function inside(p) { return p.x >= 0 && p.y >= 0 && p.x < map.w && p.y < map.h; }
 
+// tem água (ou a borda do mapa) a menos de "raio" blocos?
+function pertoDeAgua(x, z, raio) {
+  for (let r = raio / 2; r <= raio; r += raio / 2)
+    for (let k = 0; k < 16; k++) {
+      const a = k * Math.PI / 8, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      if (px < 0 || pz < 0 || px >= map.w || pz >= map.h || map.isWater(px, pz)) return true;
+    }
+  return false;
+}
+
 function placeMarker(p) {
   if (!inside(p)) { avisar('Clique dentro do mapa'); return; }
   const x = Math.floor(p.x) + 0.5, z = Math.floor(p.y) + 0.5;
@@ -152,6 +170,25 @@ function placeMarker(p) {
     if (map.isWater(x, z)) { avisar('🏠 Precisa ser em terra firme, não na água'); return; }
     map.changeMarkers(mk => { mk.nascer = { x, z }; });
     avisar('🏠 Os jogadores vão nascer aqui');
+  } else if (state.tool === 'entrada') {
+    const ents = map.markers.entradas;
+    const dist = v => Math.hypot(v.x - x, v.z - z);
+    const perto = ents.findIndex(v => dist(v) <= VILA_CLIQUE);
+    if (perto >= 0) {
+      map.changeMarkers(mk => { mk.entradas.splice(perto, 1); });
+      avisar('🕳️ Entrada de caverna removida');
+    } else if (map.isWater(x, z)) {
+      avisar('🕳️ A entrada da caverna precisa ficar em terra firme');
+    } else if (pertoDeAgua(x, z, ENTRADA_AGUA)) {
+      avisar('🕳️ Muito perto da água — a caverna ia inundar. Escolha um lugar mais longe');
+    } else if (ents.length >= MAX_ENTRADAS) {
+      avisar(`🕳️ No máximo ${MAX_ENTRADAS} entradas de caverna por mapa`);
+    } else if (ents.some(v => dist(v) < ENTRADA_DIST_MIN)) {
+      avisar('🕳️ Muito perto de outra entrada — deixe mais espaço');
+    } else {
+      map.changeMarkers(mk => { mk.entradas.push({ x, z }); });
+      avisar('🕳️ Entrada de caverna marcada! Ela desce até os túneis lá embaixo');
+    }
   } else {
     const vilas = map.markers.vilas;
     const dist = v => Math.hypot(v.x - x, v.z - z);
@@ -269,6 +306,7 @@ function showInfo(p) {
   const mk = map.markers;
   const perto = m => m && Math.hypot(m.x - p.x, m.z - p.y) <= VILA_CLIQUE;
   if (perto(mk.nascer)) marca = ' · 🏠 os jogadores nascem aqui';
+  if (mk.entradas.find(perto)) marca = ' · 🕳️ entrada de caverna';
   const vila = mk.vilas.find(perto);
   if (vila) {
     const vb = BIOMES[map.biome[map.idx(vila.x | 0, vila.z | 0)]];
@@ -294,6 +332,7 @@ window.addEventListener('keyup', e => { if (e.key === ' ') spaceDown = false; })
 function doUndo() { if (map.undo()) updateUndoButtons(); else avisar('Nada para desfazer'); }
 function doRedo() { if (map.redo()) updateUndoButtons(); }
 function updateUndoButtons() {
+  if (typeof syncCavernas === 'function') syncCavernas();   // desfazer pode mudar a quantidade de cavernas
   $('btnDesfazer').disabled = map.undoStack.length === 0;
   $('btnRefazer').disabled = map.redoStack.length === 0;
 }
@@ -554,8 +593,33 @@ $('rngExagero').oninput = () => { v3d.exagero = $('rngExagero').value / 10; v3d.
 $('chkRelevo').onchange = () => { view.relevo = $('chkRelevo').checked; view.updateImage(true); };
 $('chkGrade').onchange = () => { view.grade = $('chkGrade').checked; };
 
+// ---------- quantidade de cavernas ----------
+let cavernasMostradas = null;
+function buildCavernas() {
+  const box = $('cavernas');
+  for (const c of CAVERNAS) {
+    const b = document.createElement('button');
+    b.dataset.cav = c.id;
+    b.textContent = c.nome;
+    b.onclick = () => {
+      if (map.markers.cavernas === c.id) return;
+      map.changeMarkers(mk => { mk.cavernas = c.id; });
+      updateUndoButtons();
+      syncCavernas();
+      avisar(c.id === 'nenhuma' ? '⛏️ Sem cavernas (só as entradas 🕳️ que você marcar)' : `⛏️ Cavernas: ${c.nome.toLowerCase()}`);
+    };
+    box.appendChild(b);
+  }
+}
+function syncCavernas() {   // também acompanha desfazer/refazer e troca de mapa
+  if (map.markers.cavernas === cavernasMostradas) return;
+  cavernasMostradas = map.markers.cavernas;
+  document.querySelectorAll('[data-cav]').forEach(b => b.classList.toggle('ativo', b.dataset.cav === cavernasMostradas));
+}
+
 // ---------- laço de desenho ----------
 function loop(now) {
+  syncCavernas();
   requestAnimationFrame(loop);   // agenda o próximo quadro primeiro: um erro aqui não congela o editor
   if (painting && CONTINUOUS.has(state.tool) && now - painting.lastApply > 80) {
     painting.lastApply = now;
@@ -579,6 +643,7 @@ window.editor = { get map() { return map; }, view, v3d, state };
 // ---------- início ----------
 buildTools();
 buildBiomes();
+buildCavernas();
 setTool('bioma');
 setBiome(state.bioma);
 setRaio(10);

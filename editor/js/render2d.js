@@ -119,6 +119,7 @@ export class MapView {
     // marcadores: vilas e ponto de nascimento
     const dpr = this.dpr || 1;
     const mk = m.markers;
+    for (const v of mk.entradas) this.drawMarker(v.x, v.z, '🕳️', m.isWater(v.x, v.z), dpr);
     for (const v of mk.vilas) this.drawMarker(v.x, v.z, '🏘️', m.isWater(v.x, v.z), dpr);
     if (mk.nascer) this.drawMarker(mk.nascer.x, mk.nascer.z, '🏠', m.isWater(mk.nascer.x, mk.nascer.z), dpr);
 

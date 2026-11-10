@@ -118,6 +118,9 @@ h2 small { text-transform: none; letter-spacing: 0; font-weight: normal; }
 .bioma.ativo { background: var(--botao-hover); color: inherit; outline: 3px solid var(--ativo); outline-offset: -1px; }
 .biomas.apagado { opacity: .4; }
 
+.cavernas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cavernas button { padding: 6px 2px; font-size: 13px; min-width: 0; }
+
 .linha { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
 .linha input[type=range] { flex: 1; min-width: 80px; }
 .linha small { color: var(--suave); }

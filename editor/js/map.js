@@ -42,7 +42,8 @@ export class WorldMap {
     this.dirty = null;     // retângulo que precisa ser redesenhado
     this.version = 0;      // muda a cada alteração (usado pela prévia 3D e pelo autosalvar)
     // marcadores: onde os jogadores nascem e onde ficam as vilas (coordenadas do mapa)
-    this.markers = { nascer: null, vilas: [] };
+    // cavernas: quantidade de cavernas no subsolo ('nenhuma' | 'poucas' | 'normal' | 'muitas')
+    this.markers = { nascer: null, vilas: [], entradas: [], cavernas: 'normal' };
     this.markAll();
   }
 
@@ -153,7 +154,13 @@ export class WorldMap {
 
   // ---------- marcadores ----------
   cloneMarkers() {
-    return { nascer: this.markers.nascer && { ...this.markers.nascer }, vilas: this.markers.vilas.map(v => ({ ...v })) };
+    const mk = this.markers;
+    return {
+      nascer: mk.nascer && { ...mk.nascer },
+      vilas: mk.vilas.map(v => ({ ...v })),
+      entradas: mk.entradas.map(v => ({ ...v })),
+      cavernas: mk.cavernas,
+    };
   }
   // muda os marcadores guardando o estado anterior no desfazer
   changeMarkers(fn) {

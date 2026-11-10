@@ -34,7 +34,10 @@ export function serialize(map, nome) {
     marcadores: {
       nascer: map.markers.nascer ? { x: Math.floor(map.markers.nascer.x), z: Math.floor(map.markers.nascer.z) } : null,
       vilas: map.markers.vilas.map(v => ({ x: Math.floor(v.x), z: Math.floor(v.z) })),
+      entradas: map.markers.entradas.map(v => ({ x: Math.floor(v.x), z: Math.floor(v.z) })),
     },
+    // quantidade de cavernas no subsolo: 'nenhuma' | 'poucas' | 'normal' | 'muitas'
+    cavernas: map.markers.cavernas,
   };
 }
 
@@ -56,10 +59,13 @@ export function deserialize(obj) {
   if (mk) {
     const ok = p => p && p.x >= 0 && p.z >= 0 && p.x < m.w && p.z < m.h;
     m.markers = {
+      ...m.markers,
       nascer: ok(mk.nascer) ? { x: mk.nascer.x + 0.5, z: mk.nascer.z + 0.5 } : null,
       vilas: (mk.vilas || []).filter(ok).map(v => ({ x: v.x + 0.5, z: v.z + 0.5 })),
+      entradas: (mk.entradas || []).filter(ok).map(v => ({ x: v.x + 0.5, z: v.z + 0.5 })),
     };
   }
+  if (['nenhuma', 'poucas', 'normal', 'muitas'].includes(obj.cavernas)) m.markers.cavernas = obj.cavernas;
   m.markAll();
   return { map: m, nome: obj.nome || 'meu-mapa' };
 }

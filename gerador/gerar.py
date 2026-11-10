@@ -31,7 +31,8 @@ SEC_MIN, SEC_MAX = -4, 19    # 24 seções
 AIR, WATER, STONE, DEEPSLATE, BEDROCK = ('minecraft:air', 'minecraft:water', 'minecraft:stone',
                                          'minecraft:deepslate', 'minecraft:bedrock')
 CAVE_AIR, LAVA = 'minecraft:cave_air', 'minecraft:lava'
-CAVE_CHANCE = 0.14           # chance de um chunk do desenho começar um sistema de cavernas
+# chance de um chunk do desenho começar um sistema de cavernas, conforme a escolha "⛏️ Cavernas" do editor
+CAVE_CHANCE = {'nenhuma': 0.0, 'poucas': 0.06, 'normal': 0.14, 'muitas': 0.28}
 CAVE_MIN_Y = -59             # não escava a camada de bedrock
 CAVE_TETO = 5                # blocos de rocha preservados embaixo do chão (terra)
 CAVE_TETO_AGUA = 6           # idem embaixo de água (não inunda as cavernas)
@@ -144,15 +145,34 @@ def surface_layers(biome, top, sea, slope, wx, wz):
 
 
 # ---------------------------------------------------------------- chunk
-def plan_caves(world, cx0, cz0, cx1, cz1, seed):
-    """Planeja as cavernas do desenho: túneis sinuosos e algumas salas.
-    Devolve {(cx, cz): [(x, y, z, raio, achatamento), ...]} com as esferas que tocam cada chunk."""
+def _worm(rng, spheres, x, y, z, comp, base_r):
+    """Um túnel sinuoso a partir de (x, y, z)."""
+    yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.35, 0.35)
+    dyaw = 0.0
+    for i in range(comp):
+        x += math.cos(yaw) * math.cos(pitch)
+        z += math.sin(yaw) * math.cos(pitch)
+        y += math.sin(pitch)
+        dyaw = dyaw * 0.75 + rng.uniform(-1, 1) * 0.18
+        yaw += dyaw
+        pitch = pitch * 0.9 + rng.uniform(-1, 1) * 0.09
+        if y < CAVE_MIN_Y + 2:
+            pitch = abs(pitch)
+        r = base_r * (0.75 + 0.5 * math.sin(math.pi * i / comp))
+        if i % max(1, int(r / 1.5)) == 0:
+            spheres.append((x, y, z, r, 1.0, False))
+
+
+def plan_caves(world, cx0, cz0, cx1, cz1, seed, chance=0.14, entradas=()):
+    """Planeja as cavernas do desenho: túneis sinuosos, algumas salas e as entradas marcadas no editor.
+    Esfera = (x, y, z, raio, achatamento, aberta); "aberta" pode furar o chão (só nas bocas de caverna).
+    Devolve {(cx, cz): [esferas que tocam o chunk]} e o total de esferas."""
     spheres = []
     for cz in range(cz0, cz1 + 1):
         for cx in range(cx0, cx1 + 1):
             # semente estável por chunk (o mesmo mapa gera sempre as mesmas cavernas)
             rng = random.Random(((seed * 73856093) ^ (cx * 19349663) ^ (cz * 83492791) ^ 0x5EED) & 0xFFFFFFFF)
-            if rng.random() >= CAVE_CHANCE:
+            if rng.random() >= chance:
                 continue
             x, z = cx * 16 + rng.random() * 16, cz * 16 + rng.random() * 16
             top, _ = world.column(int(x), int(z))
@@ -161,28 +181,34 @@ def plan_caves(world, cx0, cz0, cx1, cz1, seed):
                 continue
             y = rng.uniform(-50, y_max)
             if rng.random() < 0.25:   # sala grande no começo
-                spheres.append((x, y, z, rng.uniform(5, 9), 0.55))
+                spheres.append((x, y, z, rng.uniform(5, 9), 0.55, False))
             for _ in range(rng.randint(1, 3)):
-                tx, ty, tz = x, y, z
-                yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.35, 0.35)
-                dyaw = 0.0
-                comp = rng.randint(50, 140)
-                base_r = rng.uniform(1.6, 3.2)
-                for i in range(comp):
-                    tx += math.cos(yaw) * math.cos(pitch)
-                    tz += math.sin(yaw) * math.cos(pitch)
-                    ty += math.sin(pitch)
-                    dyaw = dyaw * 0.75 + rng.uniform(-1, 1) * 0.18
-                    yaw += dyaw
-                    pitch = pitch * 0.9 + rng.uniform(-1, 1) * 0.09
-                    if ty < CAVE_MIN_Y + 2:
-                        pitch = abs(pitch)
-                    r = base_r * (0.75 + 0.5 * math.sin(math.pi * i / comp))
-                    if i % max(1, int(r / 1.5)) == 0:
-                        spheres.append((tx, ty, tz, r, 1.0))
+                _worm(rng, spheres, x, y, z, rng.randint(50, 140), rng.uniform(1.6, 3.2))
+
+    # bocas de caverna: rampa larga que começa no chão e desce até os túneis
+    for ex, ez in entradas:
+        rng = random.Random(((seed * 83492791) ^ (ex * 73856093) ^ (ez * 19349663) ^ 0xCAFE) & 0xFFFFFFFF)
+        top, _ = world.column(ex, ez)
+        x, y, z = ex + 0.5, top + 0.5, ez + 0.5
+        spheres.append((x, y, z, 3.6, 0.8, True))              # a boca, bem aberta
+        yaw, pitch = rng.uniform(0, 2 * math.pi), -0.7
+        fundo = max(-40, top - rng.randint(35, 60))
+        for i in range(200):
+            x += math.cos(yaw) * math.cos(pitch)
+            z += math.sin(yaw) * math.cos(pitch)
+            y += math.sin(pitch)
+            yaw += rng.uniform(-0.12, 0.12)
+            pitch = max(-0.9, min(-0.3, pitch + rng.uniform(-0.08, 0.08)))   # sempre descendo
+            spheres.append((x, y, z, 3.0 if i < 8 else 2.4, 1.0, i < 18))
+            if y <= fundo:
+                break
+        spheres.append((x, y, z, rng.uniform(4.5, 6.5), 0.6, False))   # sala no fim da rampa
+        for _ in range(2):                                                  # túneis que seguem dali
+            _worm(rng, spheres, x, y, z, rng.randint(60, 120), rng.uniform(1.8, 3.0))
+
     by_chunk = {}
     for s in spheres:
-        x, _, z, r, _ = s
+        x, _, z, r = s[:4]
         for ccz in range(math.floor((z - r) / 16), math.floor((z + r) / 16) + 1):
             for ccx in range(math.floor((x - r) / 16), math.floor((x + r) / 16) + 1):
                 by_chunk.setdefault((ccx, ccz), []).append(s)
@@ -218,7 +244,7 @@ def build_chunk(world, cx, cz, caves=None):
     carved = set()
     carved_secs = set()
     bx0, bz0 = cx * 16, cz * 16
-    for (sx, sy, sz, r, vs) in caves or ():
+    for (sx, sy, sz, r, vs, aberta) in caves or ():
         ry = r * vs
         xa, xb = max(0, math.floor(sx - r) - bx0), min(15, math.ceil(sx + r) - bx0)
         za, zb = max(0, math.floor(sz - r) - bz0), min(15, math.ceil(sz + r) - bz0)
@@ -239,9 +265,24 @@ def build_chunk(world, cx, cz, caves=None):
                     if dx * dx <= rest:
                         ci = z * 16 + x
                         top = tops[ci]
-                        if y <= top - (CAVE_TETO_AGUA if top < sea - 1 else CAVE_TETO):
+                        if top < sea - 1:
+                            limite = top - CAVE_TETO_AGUA          # embaixo d'água: nunca fura
+                        else:
+                            limite = top if aberta else top - CAVE_TETO
+                        if y <= limite:
                             carved.add((y - MIN_Y) * 256 + ci)
                             carved_secs.add(y >> 4)
+
+    # onde a boca da caverna furou o chão, o topo da coluna desceu (para os heightmaps)
+    new_tops = list(tops)
+    if carved:
+        for ci in range(256):
+            t = tops[ci]
+            if t >= sea - 1 and (t - MIN_Y) * 256 + ci in carved:
+                y = t
+                while y > MIN_Y and (y - MIN_Y) * 256 + ci in carved:
+                    y -= 1
+                new_tops[ci] = y
 
     def block(c, y, ci=None):
         if carved and ci is not None and (y - MIN_Y) * 256 + ci in carved:
@@ -312,8 +353,9 @@ def build_chunk(world, cx, cz, caves=None):
         sections.append({'Y': Byte(sy), 'biomes': biomes, 'block_states': bs})
 
     # heightmaps (valor = y do bloco mais alto + 1 - MIN_Y)
-    surface = [max(t, sea - 1) + 1 - MIN_Y for t in tops]      # água conta
-    floor = [t + 1 - MIN_Y for t in tops]                      # só sólidos
+    # coluna com água: a água conta para WORLD_SURFACE; coluna de terra: o topo real (já com a boca de caverna)
+    surface = [(max(t, sea - 1) if t < sea - 1 else nt) + 1 - MIN_Y for t, nt in zip(tops, new_tops)]
+    floor = [nt + 1 - MIN_Y for nt in new_tops]                # só sólidos
     hm = lambda vals: LongArray(pack(vals, 9))  # noqa: E731
     heightmaps = {
         'MOTION_BLOCKING': hm(surface), 'MOTION_BLOCKING_NO_LEAVES': hm(surface),
@@ -390,10 +432,21 @@ def main():
     regions = {}
     t0 = time.time()
     caves, n_esferas = {}, 0
-    if not a.sem_cavernas:
+    marcadores = p.get('marcadores') or {}
+    qtd_cavernas = 'nenhuma' if a.sem_cavernas else (p.get('cavernas') or 'normal')
+    entradas = []
+    for e in marcadores.get('entradas') or []:
+        wx, wz = e['x'] + world.ox, e['z'] + world.oz
+        hh, bb = world.column(wx, wz)
+        if hh < sea or bb in AQUATIC:
+            print(f'  aviso: a entrada de caverna em X {wx} Z {wz} ficou na água; ignorada')
+            continue
+        entradas.append((wx, wz))
+    if qtd_cavernas != 'nenhuma' or entradas:
         caves, n_esferas = plan_caves(world, world.ox // 16, world.oz // 16,
-                                      (world.ox + w) // 16 - 1, (world.oz + h) // 16 - 1, int(p.get('semente') or 0))
-        print(f'  cavernas planejadas: {n_esferas} trechos')
+                                      (world.ox + w) // 16 - 1, (world.oz + h) // 16 - 1, int(p.get('semente') or 0),
+                                      CAVE_CHANCE.get(qtd_cavernas, CAVE_CHANCE['normal']), entradas)
+        print(f'  cavernas: {qtd_cavernas}, {len(entradas)} entrada(s) marcada(s), {n_esferas} trechos')
     total = (c1x - c0x + 1) * (c1z - c0z + 1)
     done = 0
     for cz in range(c0z, c1z + 1):
@@ -406,7 +459,6 @@ def main():
     for (rx, rz), chunks in regions.items():
         write_region(os.path.join(a.saida, 'region', f'r.{rx}.{rz}.mca'), chunks)
 
-    marcadores = p.get('marcadores') or {}
     spawn, spawn_origem = find_spawn(world), 'automático (terra firme mais perto do centro)'
     nascer = marcadores.get('nascer')
     if nascer:
@@ -434,6 +486,8 @@ def main():
         'spawn': spawn,
         'spawn_origem': spawn_origem,
         'vilas': vilas,
+        'cavernas': qtd_cavernas,
+        'entradas_caverna': [{'x': x, 'y': world.column(x, z)[0], 'z': z} for x, z in entradas],
         'regioes': sorted(f'r.{rx}.{rz}.mca' for rx, rz in regions),
     }
     json.dump(info, open(os.path.join(a.saida, 'info.json'), 'w', encoding='utf-8'), indent=2, ensure_ascii=False)

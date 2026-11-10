@@ -151,7 +151,7 @@ export class View3D {
     this.ctx.putImageData(this.img, 0, 0);
 
     // marcadores (vilas e nascimento) por cima do relevo
-    const pins = map.markers.vilas.map(v => [v, '🏘️']);
+    const pins = [...map.markers.entradas.map(v => [v, '🕳️']), ...map.markers.vilas.map(v => [v, '🏘️'])];
     if (map.markers.nascer) pins.push([map.markers.nascer, '🏠']);
     const ctx = this.ctx;
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -172,6 +172,6 @@ export class View3D {
   // os marcadores mudam sem mudar o relevo: redesenha quando mudarem
   markersKey(map) {
     const mk = map.markers;
-    return JSON.stringify([mk.nascer, mk.vilas]);
+    return JSON.stringify([mk.nascer, mk.vilas, mk.entradas]);
   }
 }
