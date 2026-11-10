@@ -30,6 +30,11 @@ export function serialize(map, nome) {
     biomaGrade: toB64(map.biome),
     // alturas com fração, para continuar editando sem perder suavidade
     alturasFinas: toB64(new Uint8Array(map.height.buffer)),
+    // marcadores em coordenadas do mapa (x = coluna, z = linha). O tipo da vila sai do bioma na hora de gerar.
+    marcadores: {
+      nascer: map.markers.nascer ? { x: Math.floor(map.markers.nascer.x), z: Math.floor(map.markers.nascer.z) } : null,
+      vilas: map.markers.vilas.map(v => ({ x: Math.floor(v.x), z: Math.floor(v.z) })),
+    },
   };
 }
 
@@ -47,6 +52,14 @@ export function deserialize(obj) {
   const raw = fromB64(obj.biomaGrade);
   const map = obj.biomas.map(id => BIOME_INDEX[id] ?? BIOME_INDEX['minecraft:plains']);
   for (let i = 0; i < raw.length; i++) m.biome[i] = map[raw[i]];
+  const mk = obj.marcadores;
+  if (mk) {
+    const ok = p => p && p.x >= 0 && p.z >= 0 && p.x < m.w && p.z < m.h;
+    m.markers = {
+      nascer: ok(mk.nascer) ? { x: mk.nascer.x + 0.5, z: mk.nascer.z + 0.5 } : null,
+      vilas: (mk.vilas || []).filter(ok).map(v => ({ x: v.x + 0.5, z: v.z + 0.5 })),
+    };
+  }
   m.markAll();
   return { map: m, nome: obj.nome || 'meu-mapa' };
 }

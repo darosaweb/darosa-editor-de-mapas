@@ -34,6 +34,12 @@ BLEND = 24                   # blocos para o terreno descer suavemente até o oc
 
 AQUATIC = {'minecraft:ocean', 'minecraft:warm_ocean', 'minecraft:frozen_ocean', 'minecraft:river',
            'minecraft:deep_ocean', 'minecraft:lukewarm_ocean', 'minecraft:cold_ocean'}
+# mesmo critério do editor (editor/js/biomes.js): estilo de vila que combina com o bioma
+VILA_POR_BIOMA = {
+    'minecraft:desert': 'desert', 'minecraft:badlands': 'desert', 'minecraft:beach': 'desert',
+    'minecraft:savanna': 'savanna', 'minecraft:taiga': 'taiga',
+    'minecraft:snowy_plains': 'snowy', 'minecraft:snowy_taiga': 'snowy',
+}
 BADLANDS_BANDS = ['minecraft:terracotta', 'minecraft:orange_terracotta', 'minecraft:yellow_terracotta',
                   'minecraft:terracotta', 'minecraft:white_terracotta', 'minecraft:orange_terracotta',
                   'minecraft:red_terracotta', 'minecraft:terracotta', 'minecraft:light_gray_terracotta',
@@ -309,7 +315,25 @@ def main():
     for (rx, rz), chunks in regions.items():
         write_region(os.path.join(a.saida, 'region', f'r.{rx}.{rz}.mca'), chunks)
 
-    spawn = find_spawn(world)
+    marcadores = p.get('marcadores') or {}
+    spawn, spawn_origem = find_spawn(world), 'automático (terra firme mais perto do centro)'
+    nascer = marcadores.get('nascer')
+    if nascer:
+        wx, wz = nascer['x'] + world.ox, nascer['z'] + world.oz
+        hh, bb = world.column(wx, wz)
+        if hh >= sea and bb not in AQUATIC:
+            spawn, spawn_origem = (wx, hh + 1, wz), 'marcado no editor 🏠'
+        else:
+            print('  aviso: o ponto 🏠 está na água; usando o automático')
+    vilas = []
+    for v in marcadores.get('vilas') or []:
+        wx, wz = v['x'] + world.ox, v['z'] + world.oz
+        hh, bb = world.column(wx, wz)
+        if hh < sea or bb in AQUATIC:
+            print(f'  aviso: a vila em X {wx} Z {wz} ficou na água; ignorada')
+            continue
+        vilas.append({'x': wx, 'y': hh + 1, 'z': wz, 'bioma': bb,
+                      'estrutura': f'minecraft:village_{VILA_POR_BIOMA.get(bb, "plains")}'})
     info = {
         'projeto': p.get('nome'), 'largura': w, 'altura': h, 'nivelMar': sea,
         'desenho_x': [world.ox, world.ox + w - 1], 'desenho_z': [world.oz, world.oz + h - 1],
@@ -317,10 +341,14 @@ def main():
         # borda do mundo: o desenho + 16 blocos de mar, centrada no 0,0
         'borda_centro': [0, 0], 'borda_tamanho': max(w, h) + 32,
         'spawn': spawn,
+        'spawn_origem': spawn_origem,
+        'vilas': vilas,
         'regioes': sorted(f'r.{rx}.{rz}.mca' for rx, rz in regions),
     }
     json.dump(info, open(os.path.join(a.saida, 'info.json'), 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
-    print(f'{total} chunks em {len(regions)} regiões, {time.time() - t0:.1f}s. Spawn sugerido: {spawn}')
+    print(f'{total} chunks em {len(regions)} regiões, {time.time() - t0:.1f}s.')
+    print(f'Spawn: {spawn} ({spawn_origem}). Vilas marcadas: {len(vilas)}'
+          + ''.join(f'\n  - {v["estrutura"]} em X {v["x"]} Z {v["z"]}' for v in vilas))
 
 
 if __name__ == '__main__':

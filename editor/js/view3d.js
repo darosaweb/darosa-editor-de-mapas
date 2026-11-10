@@ -89,6 +89,8 @@ export class View3D {
       this.lastBuild = now;
       this.build(map);
     }
+    const key = this.markersKey(map);
+    if (key !== this.lastMarkers) { this.lastMarkers = key; this.needDraw = true; }
     if (!this.needDraw) return;
     this.needDraw = false;
     this.render(map);
@@ -147,5 +149,29 @@ export class View3D {
       dz += 0.004 * dz + 0.002;
     }
     this.ctx.putImageData(this.img, 0, 0);
+
+    // marcadores (vilas e nascimento) por cima do relevo
+    const pins = map.markers.vilas.map(v => [v, '🏘️']);
+    if (map.markers.nascer) pins.push([map.markers.nascer, '🏠']);
+    const ctx = this.ctx;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.font = `${Math.max(12, Math.round(W / 26))}px system-ui, "Segoe UI Emoji", sans-serif`;
+    for (const [m, ic] of pins) {
+      const dx = m.x - px, dz = m.z - py;
+      const depth = dx * -sin + dz * -cos;          // distância para a frente da câmera
+      if (depth < 2) continue;
+      const side = dx * cos + dz * -sin;            // para a direita
+      const sx = (side / depth + 1) * W / 2;
+      const i = (m.z | 0) * mw + (m.x | 0);
+      const sy = (camH - hgt[i]) / depth * scaleH + horizon;
+      if (sx < 0 || sx > W || sy < 0 || sy > Hs) continue;
+      ctx.fillText(ic, sx, sy);
+    }
+  }
+
+  // os marcadores mudam sem mudar o relevo: redesenha quando mudarem
+  markersKey(map) {
+    const mk = map.markers;
+    return JSON.stringify([mk.nascer, mk.vilas]);
   }
 }

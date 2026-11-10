@@ -116,15 +116,54 @@ export class MapView {
       ctx.stroke();
     }
 
-    // círculo do pincel
+    // marcadores: vilas e ponto de nascimento
+    const dpr = this.dpr || 1;
+    const mk = m.markers;
+    for (const v of mk.vilas) this.drawMarker(v.x, v.z, '🏘️', m.isWater(v.x, v.z), dpr);
+    if (mk.nascer) this.drawMarker(mk.nascer.x, mk.nascer.z, '🏠', m.isWater(mk.nascer.x, mk.nascer.z), dpr);
+
+    // pincel: círculo, ou o ícone do marcador que vai ser colocado
     if (this.cursor) {
-      const { x, y, r } = this.cursor;
+      const { x, y, r, icone } = this.cursor;
       const sx = this.panX + x * z, sy = this.panY + y * z;
-      ctx.beginPath();
-      ctx.arc(sx, sy, Math.max(2, r * z), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.5; ctx.stroke();
+      if (icone) {
+        ctx.globalAlpha = 0.6;
+        this.drawMarker(x, y, icone, false, dpr);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.beginPath();
+        ctx.arc(sx, sy, Math.max(2, r * z), 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
     }
+  }
+
+  // Ícone com fundo branco redondo e uma "ponta" no lugar exato; tamanho fixo na tela
+  drawMarker(x, y, icone, alerta, dpr) {
+    const ctx = this.ctx, z = this.zoom;
+    const sx = this.panX + x * z, sy = this.panY + y * z;
+    const R = 15 * dpr, cy = sy - R - 6 * dpr;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 4 * dpr;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx - 6 * dpr, cy + R * 0.7);
+    ctx.lineTo(sx + 6 * dpr, cy + R * 0.7);
+    ctx.closePath();
+    ctx.fillStyle = alerta ? '#e03131' : '#ffffff';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2 * dpr;
+    ctx.strokeStyle = alerta ? '#e03131' : '#cc3467';
+    ctx.stroke();
+    ctx.font = `${Math.round(17 * dpr)}px system-ui, "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(alerta ? '⚠️' : icone, sx, cy + 1 * dpr);
+    ctx.restore();
   }
 
   // imagem PNG do mapa no modo atual (para exportar)

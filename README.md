@@ -16,6 +16,9 @@ veja a prévia em 3D, e um gerador transforma o desenho num **mundo jogável** (
 - **Pincéis de bioma** (21 biomas vanilla, com cores, emojis e legenda) e **balde** para pintar áreas inteiras.
 - **Pincéis de terreno**: subir, descer, montanha, rio, alisar e nivelar; tamanho e força ajustáveis.
 - **Pincel mágico**: pintar oceano/rio afunda o terreno; pintar terra sobre a água levanta o chão.
+- **🏠 Nascer aqui**: marca onde os jogadores aparecem no mundo (sem marca, o gerador escolhe a terra firme mais perto do centro).
+- **🏘️ Vila**: marca onde vão ficar as vilas (até 8, longe umas das outras, só em terra). O estilo da vila
+  segue o bioma: deserto, savana, taiga, neve ou planície (os demais biomas). Clicar numa vila tira ela.
 - **Nível do mar** configurável, água preenchida automaticamente.
 - **Prévia 3D** ao vivo (arraste para girar) e mapa 2D por bioma ou por altura.
 - **Modo simples** (botões grandes, poucos biomas) e **modo avançado**.
@@ -92,6 +95,8 @@ JSON compactado com gzip:
 - `biomas` — lista de nomes (`minecraft:forest`…); `biomaGrade` = 1 byte por coluna, índice nessa lista (base64)
 - `alturas` — Int16 little-endian por coluna, linha a linha (z), coluna a coluna (x) (base64): Y do bloco mais alto do terreno
 - `alturasFinas` — Float32, só para continuar editando sem perder suavidade
+- `marcadores` — `{ nascer: {x, z} | null, vilas: [{x, z}] }` em coordenadas do desenho. O gerador converte para
+  coordenadas do mundo e grava em `info.json` o spawn e as vilas (`minecraft:village_<estilo>`).
 
 ## Atalhos
 

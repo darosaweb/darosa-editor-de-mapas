@@ -26,7 +26,17 @@ export const BIOMES = [
   { id: 'minecraft:frozen_ocean',    nome: 'Oceano congelado',  emoji: '🧊', cor: '#8fb0d8', simples: false, agua: true, profundidade: 12 },
 ];
 
-export const BIOME_INDEX = Object.fromEntries(BIOMES.map((b, i) => [b.id, i]));
+// Tipo de vila do Minecraft que combina com cada bioma (as vilas vanilla existem em 5 estilos)
+const VILA_POR_BIOMA = {
+  'minecraft:desert': 'desert', 'minecraft:badlands': 'desert', 'minecraft:beach': 'desert',
+  'minecraft:savanna': 'savanna',
+  'minecraft:taiga': 'taiga',
+  'minecraft:snowy_plains': 'snowy', 'minecraft:snowy_taiga': 'snowy',
+};
+export const VILA_NOMES = { plains: 'planície', desert: 'deserto', savanna: 'savana', taiga: 'taiga', snowy: 'neve' };
+export function tipoDeVila(biomeId) { return VILA_POR_BIOMA[biomeId] || 'plains'; }
+
+export const BIOME_INDEX =Object.fromEntries(BIOMES.map((b, i) => [b.id, i]));
 export const OCEAN = BIOME_INDEX['minecraft:ocean'];
 export const RIVER = BIOME_INDEX['minecraft:river'];
 export const PLAINS = BIOME_INDEX['minecraft:plains'];

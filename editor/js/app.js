@@ -1,5 +1,5 @@
 // Liga tudo: interface, ferramentas, mapa 2D, prévia 3D, salvar/abrir.
-import { BIOMES, BIOME_INDEX } from './biomes.js';
+import { BIOMES, BIOME_INDEX, VILA_NOMES, tipoDeVila } from './biomes.js';
 import { WorldMap } from './map.js';
 import { MapView } from './render2d.js';
 import { View3D } from './view3d.js';
@@ -20,10 +20,16 @@ const TOOLS = [
   { id: 'rio',      ic: '🏞️', nome: 'Rio',      dica: 'Desenhe o caminho do rio' },
   { id: 'suavizar', ic: '🧽', nome: 'Alisar',   dica: 'Deixa o terreno mais liso' },
   { id: 'nivelar',  ic: '📏', nome: 'Nivelar',  dica: 'Deixa tudo na mesma altura (a do lugar onde você clicou)' },
+  { id: 'nascer',   ic: '🏠', nome: 'Nascer aqui', dica: 'Onde os jogadores aparecem quando entram no mundo' },
+  { id: 'vila',     ic: '🏘️', nome: 'Vila',     dica: 'Clique para pôr uma vila; clique numa vila para tirar' },
   { id: 'pegar',    ic: '💧', nome: 'Pegar bioma', dica: 'Clique no mapa para escolher o bioma de lá', avancado: true },
 ];
 const CONTINUOUS = new Set(['subir', 'descer', 'montanha', 'suavizar', 'nivelar']);
 const USES_BIOME = new Set(['bioma', 'balde']);
+const MARKER_TOOLS = new Set(['nascer', 'vila']);
+const MAX_VILAS = 8;
+const VILA_DIST_MIN = 64;     // blocos entre uma vila e outra (cada vila ocupa uns 60–100 blocos)
+const VILA_CLIQUE = 12;       // clicar a menos disso de uma vila tira ela
 
 const state = {
   tool: 'bioma',
@@ -139,7 +145,34 @@ function strokeTo(p) {
 
 function inside(p) { return p.x >= 0 && p.y >= 0 && p.x < map.w && p.y < map.h; }
 
+function placeMarker(p) {
+  if (!inside(p)) { avisar('Clique dentro do mapa'); return; }
+  const x = Math.floor(p.x) + 0.5, z = Math.floor(p.y) + 0.5;
+  if (state.tool === 'nascer') {
+    if (map.isWater(x, z)) { avisar('🏠 Precisa ser em terra firme, não na água'); return; }
+    map.changeMarkers(mk => { mk.nascer = { x, z }; });
+    avisar('🏠 Os jogadores vão nascer aqui');
+  } else {
+    const vilas = map.markers.vilas;
+    const dist = v => Math.hypot(v.x - x, v.z - z);
+    const perto = vilas.findIndex(v => dist(v) <= VILA_CLIQUE);
+    if (perto >= 0) {
+      map.changeMarkers(mk => { mk.vilas.splice(perto, 1); });
+      avisar('🏘️ Vila removida');
+      return;
+    }
+    if (map.isWater(x, z)) { avisar('🏘️ Vila precisa ficar em terra firme'); return; }
+    if (vilas.length >= MAX_VILAS) { avisar(`🏘️ No máximo ${MAX_VILAS} vilas por mapa`); return; }
+    if (vilas.some(v => dist(v) < VILA_DIST_MIN)) { avisar('🏘️ Muito perto de outra vila — deixe mais espaço'); return; }
+    map.changeMarkers(mk => { mk.vilas.push({ x, z }); });
+    const b = BIOMES[map.biome[map.idx(x | 0, z | 0)]];
+    avisar(`🏘️ Vila de ${VILA_NOMES[tipoDeVila(b.id)]} marcada!`);
+  }
+  updateUndoButtons();
+}
+
 function startPaint(p) {
+  if (MARKER_TOOLS.has(state.tool)) { placeMarker(p); return; }
   if (state.tool === 'pegar') {
     if (inside(p)) { setBiome(map.biome[map.idx(p.x | 0, p.y | 0)]); setTool('bioma'); avisar('Bioma escolhido: ' + BIOMES[state.bioma].nome); }
     return;
@@ -186,7 +219,9 @@ mapCanvas.addEventListener('pointermove', e => {
   const pos = evPos(e);
   if (pointers.has(e.pointerId)) pointers.set(e.pointerId, pos);
   const p = view.toMap(pos.sx, pos.sy);
-  view.cursor = { x: p.x, y: p.y, r: state.raio };
+  view.cursor = MARKER_TOOLS.has(state.tool)
+    ? { x: p.x, y: p.y, r: 0, icone: TOOLS.find(t => t.id === state.tool).ic }
+    : { x: p.x, y: p.y, r: state.raio };
   showInfo(p);
   if (pinch && pointers.size === 2) {
     const [a, b] = [...pointers.values()];
@@ -223,7 +258,16 @@ function showInfo(p) {
   const s = map.stats(p.x | 0, p.y | 0);
   if (!s) { $('info').textContent = 'Fora do mapa (lá será oceano)'; return; }
   const agua = s.altura < map.seaLevel ? ` · 💧 ${map.seaLevel - s.altura} de água` : '';
-  $('info').textContent = `X ${p.x | 0} · Z ${p.y | 0} · altura ${s.altura}${agua} · ${s.bioma.emoji} ${s.bioma.nome}`;
+  let marca = '';
+  const mk = map.markers;
+  const perto = m => m && Math.hypot(m.x - p.x, m.z - p.y) <= VILA_CLIQUE;
+  if (perto(mk.nascer)) marca = ' · 🏠 os jogadores nascem aqui';
+  const vila = mk.vilas.find(perto);
+  if (vila) {
+    const vb = BIOMES[map.biome[map.idx(vila.x | 0, vila.z | 0)]];
+    marca = map.isWater(vila.x, vila.z) ? ' · ⚠️ esta vila ficou na água' : ` · 🏘️ vila de ${VILA_NOMES[tipoDeVila(vb.id)]}`;
+  }
+  $('info').textContent = `X ${p.x | 0} · Z ${p.y | 0} · altura ${s.altura}${agua} · ${s.bioma.emoji} ${s.bioma.nome}${marca}`;
 }
 
 // ---------- teclado ----------

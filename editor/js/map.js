@@ -41,6 +41,8 @@ export class WorldMap {
     this.redoStack = [];
     this.dirty = null;     // retângulo que precisa ser redesenhado
     this.version = 0;      // muda a cada alteração (usado pela prévia 3D e pelo autosalvar)
+    // marcadores: onde os jogadores nascem e onde ficam as vilas (coordenadas do mapa)
+    this.markers = { nascer: null, vilas: [] };
     this.markAll();
   }
 
@@ -128,15 +130,43 @@ export class WorldMap {
     this.redoStack = [];
     return true;
   }
+  // Uma entrada do desfazer é uma lista de blocos do terreno ou {markers} (marcadores de antes)
+  swapEntry(e) {
+    if (e.markers) {
+      const atual = this.cloneMarkers();
+      this.markers = e.markers;
+      this.version++;
+      return { markers: atual };
+    }
+    return e.map(t => this.restoreTile(t));
+  }
   undo() {
     const e = this.undoStack.pop(); if (!e) return false;
-    this.redoStack.push(e.map(t => this.restoreTile(t)));
+    this.redoStack.push(this.swapEntry(e));
     return true;
   }
   redo() {
     const e = this.redoStack.pop(); if (!e) return false;
-    this.undoStack.push(e.map(t => this.restoreTile(t)));
+    this.undoStack.push(this.swapEntry(e));
     return true;
+  }
+
+  // ---------- marcadores ----------
+  cloneMarkers() {
+    return { nascer: this.markers.nascer && { ...this.markers.nascer }, vilas: this.markers.vilas.map(v => ({ ...v })) };
+  }
+  // muda os marcadores guardando o estado anterior no desfazer
+  changeMarkers(fn) {
+    const antes = this.cloneMarkers();
+    fn(this.markers);
+    this.undoStack.push({ markers: antes });
+    if (this.undoStack.length > 60) this.undoStack.shift();
+    this.redoStack = [];
+    this.version++;
+  }
+  isWater(x, z) {
+    const i = this.idx(Math.floor(x), Math.floor(z));
+    return this.height[i] < this.seaLevel || BIOMES[this.biome[i]].agua;
   }
   // ---------- pincéis ----------
   // tool: 'bioma' | 'subir' | 'descer' | 'suavizar' | 'nivelar' | 'montanha' | 'rio'

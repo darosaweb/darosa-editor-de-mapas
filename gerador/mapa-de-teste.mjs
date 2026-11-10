@@ -29,6 +29,9 @@ for (let k = 0; k < 10; k++) paint('montanha', [[170, 75]], { raio: 26, forca: 0
 paint('suavizar', blob(90, 175, 24), { raio: 14, forca: 0.5 });
 paint('rio', line(40, 128, 220, 140, 120), { raio: 6, forca: 0.7 });
 
+// marcadores: nascer perto do centro, uma vila no deserto e uma na selva (vira vila de planície)
+m.markers = { nascer: { x: 128.5, z: 150.5 }, vilas: [{ x: 85.5, z: 85.5 }, { x: 175.5, z: 175.5 }] };
+
 const json = JSON.stringify(serialize(m, 'teste-256'));
 writeFileSync(out, gzipSync(json));
 let mx = -999; for (const v of m.height) mx = Math.max(mx, v);
