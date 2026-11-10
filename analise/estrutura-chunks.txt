@@ -1,0 +1,128 @@
+===== minecraft:full  chunk local (0,0) xPos=0 zPos=0
+xPos: Int = 0
+yPos: Int = -4
+block_ticks: List<End>[0]
+zPos: Int = 0
+InhabitedTime: Long = 4330
+sections: List<Compound>[25]
+  [0]:
+    Y: Byte = -5
+    starlight.skylight_state: Int = 1
+    starlight.blocklight_state: Int = 1
+isLightOn: Byte = 0
+PostProcessing: List<List>[24]
+  [0]:
+Status: String = 'minecraft:full'
+DataVersion: Int = 4903
+structures: Compound
+  References: Compound
+  starts: Compound
+fluid_ticks: List<End>[0]
+block_entities: List<End>[0]
+Heightmaps: Compound
+  MOTION_BLOCKING: LongArray[37]
+  MOTION_BLOCKING_NO_LEAVES: LongArray[37]
+  WORLD_SURFACE: LongArray[37]
+  OCEAN_FLOOR: LongArray[37]
+starlight.light_version: Int = 10
+LastUpdate: Long = 6733557
+
+===== minecraft:terrain  chunk local (26,31) xPos=26 zPos=31
+xPos: Int = 26
+yPos: Int = -4
+block_ticks: List<End>[0]
+InhabitedTime: Long = 0
+zPos: Int = 31
+sections: List<Compound>[24]
+  [0]:
+    Y: Byte = -4
+    biomes: Compound
+      palette: List<String>[1]
+        = ['minecraft:deep_lukewarm_ocean']
+    block_states: Compound
+      data: LongArray[256]
+      palette: List<String>[2]
+        = ['minecraft:bedrock', 'minecraft:deepslate']
+entities: List<End>[0]
+PostProcessing: List<List>[24]
+  [0]:
+Status: String = 'minecraft:terrain'
+DataVersion: Int = 5023
+structures: Compound
+  References: Compound
+    minecraft:mineshaft: LongArray[1]
+  starts: Compound
+fluid_ticks: List<End>[0]
+block_entities: List<End>[0]
+Heightmaps: Compound
+  MOTION_BLOCKING: LongArray[37]
+  MOTION_BLOCKING_NO_LEAVES: LongArray[37]
+  OCEAN_FLOOR_WG: LongArray[37]
+  WORLD_SURFACE: LongArray[37]
+  WORLD_SURFACE_WG: LongArray[37]
+  OCEAN_FLOOR: LongArray[37]
+LastUpdate: Long = 17866718
+
+===== minecraft:initialize_light  chunk local (25,30) xPos=25 zPos=30
+xPos: Int = 25
+yPos: Int = -4
+block_ticks: List<End>[0]
+InhabitedTime: Long = 0
+zPos: Int = 30
+sections: List<Compound>[24]
+  [0]:
+    Y: Byte = -4
+    biomes: Compound
+      palette: List<String>[1]
+        = ['minecraft:deep_lukewarm_ocean']
+    block_states: Compound
+      data: LongArray[256]
+      palette: List<String>[9]
+        = ['minecraft:bedrock', 'minecraft:deepslate', 'minecraft:deepslate_redstone_ore', 'minecraft:gravel', 'minecraft:deepslate_diamond_ore', 'minecraft:deepslate_gold_ore'] …
+entities: List<End>[0]
+PostProcessing: List<List>[24]
+  [0]:
+Status: String = 'minecraft:initialize_light'
+DataVersion: Int = 5023
+structures: Compound
+  References: Compound
+  starts: Compound
+fluid_ticks: List<End>[0]
+block_entities: List<End>[0]
+Heightmaps: Compound
+  MOTION_BLOCKING: LongArray[37]
+  MOTION_BLOCKING_NO_LEAVES: LongArray[37]
+  OCEAN_FLOOR_WG: LongArray[37]
+  WORLD_SURFACE: LongArray[37]
+  WORLD_SURFACE_WG: LongArray[37]
+  OCEAN_FLOOR: LongArray[37]
+LastUpdate: Long = 17866716
+
+===== minecraft:structure_starts  chunk local (0,0) xPos=0 zPos=96
+xPos: Int = 0
+yPos: Int = -4
+block_ticks: List<End>[0]
+InhabitedTime: Long = 0
+zPos: Int = 96
+sections: List<Compound>[24]
+  [0]:
+    Y: Byte = -4
+    biomes: Compound
+      palette: List<String>[1]
+        = ['minecraft:plains']
+    block_states: Compound
+      palette: List<String>[1]
+        = ['minecraft:air']
+entities: List<End>[0]
+PostProcessing: List<List>[24]
+  [0]:
+Status: String = 'minecraft:structure_starts'
+DataVersion: Int = 5023
+structures: Compound
+  References: Compound
+  starts: Compound
+fluid_ticks: List<End>[0]
+block_entities: List<End>[0]
+Heightmaps: Compound
+LastUpdate: Long = 9803884
+

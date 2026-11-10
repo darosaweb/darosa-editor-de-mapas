@@ -1,0 +1,18 @@
+# Dados e programas que NAO podem ir para um repositorio publico: mundo do servidor, jars da Mojang/Paper,
+# servidor de teste (semente, senha RCON) e as instrucoes com dados da rede de casa.
+
+analise/pi-copia/
+analise/servidor/
+teste-servidor/dados/
+prompt-editor-de-mapas.md
+
+
+saida/
+mapas/
+__pycache__/
+*.pyc
+
+
+.claude/
+Thumbs.db
+.DS_Store

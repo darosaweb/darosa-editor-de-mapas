@@ -1,0 +1,97 @@
+
+Teste ler→gravar NBT idêntico byte a byte: True; compactação de blocos idêntica: True
+
+## minecraft:full: Status=minecraft:full DataVersion=5023 pos=(5,0) yPos=-4
+seções: 25 (Y de -5 a 19)
+chaves nas seções: {'Y': 25, 'starlight.skylight_state': 11, 'starlight.blocklight_state': 11, 'biomes': 24, 'block_states': 24, 'BlockLight': 8, 'SkyLight': 2}
+biomas (células 4x4x4): {'minecraft:mushroom_fields': 1478, 'minecraft:lush_caves': 58}
+blocos mais comuns: air=68321, deepslate=11611, stone=11397, diorite=1300, dirt=967, andesite=965, granite=908, tuff=826, bedrock=772, gravel=391, mycelium=259, clay=101, coal_ore=88, copper_ore=72
+exemplo de bloco com propriedades: {'id': 'minecraft:water', 'properties': {'level': '2'}}
+heightmap MOTION_BLOCKING            [37 longs] confere com "bloco mais alto" em 254/256 colunas; amostra [71, 71, 71, 70]
+heightmap MOTION_BLOCKING_NO_LEAVES  [37 longs] confere com "bloco mais alto" em 254/256 colunas; amostra [71, 71, 71, 70]
+heightmap WORLD_SURFACE              [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [71, 71, 71, 70]
+heightmap OCEAN_FLOOR                [37 longs] confere com "bloco mais alto" em 254/256 colunas; amostra [71, 71, 71, 70]
+dados de luz nas seções: ['starlight.skylight_state', 'starlight.blocklight_state', 'BlockLight', 'SkyLight'] | isLightOn = 0
+
+## minecraft:terrain: Status=minecraft:terrain DataVersion=5023 pos=(26,31) yPos=-4
+seções: 24 (Y de -4 a 19)
+chaves nas seções: {'Y': 24, 'biomes': 24, 'block_states': 24}
+biomas (células 4x4x4): {'minecraft:deep_lukewarm_ocean': 1536}
+blocos mais comuns: air=65800, deepslate=15876, stone=7924, water=7011, bedrock=764, sand=256, andesite=244, granite=145, smooth_basalt=96, calcite=73, amethyst_block=49, gravel=46, tall_seagrass=16, budding_amethyst=2
+exemplo de bloco com propriedades: {'id': 'minecraft:tall_seagrass', 'properties': {'half': 'upper'}}
+heightmap MOTION_BLOCKING            [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap MOTION_BLOCKING_NO_LEAVES  [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap OCEAN_FLOOR_WG             [37 longs] confere com "bloco mais alto" em 0/256 colunas; amostra [36, 36, 36, 36]
+heightmap WORLD_SURFACE              [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap WORLD_SURFACE_WG           [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap OCEAN_FLOOR                [37 longs] confere com "bloco mais alto" em 0/256 colunas; amostra [36, 36, 36, 36]
+dados de luz nas seções: nenhum | isLightOn = None
+
+## minecraft:initialize_light: Status=minecraft:initialize_light DataVersion=5023 pos=(25,30) yPos=-4
+seções: 24 (Y de -4 a 19)
+chaves nas seções: {'Y': 24, 'biomes': 24, 'block_states': 24}
+biomas (células 4x4x4): {'minecraft:deep_lukewarm_ocean': 1536}
+blocos mais comuns: air=65813, deepslate=14329, water=7528, stone=5755, tuff=1243, bedrock=768, granite=709, diorite=635, gravel=444, andesite=278, sand=270, tall_seagrass=136, dirt=98, coal_ore=47
+exemplo de bloco com propriedades: {'id': 'minecraft:tall_seagrass', 'properties': {'half': 'upper'}}
+heightmap MOTION_BLOCKING            [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap MOTION_BLOCKING_NO_LEAVES  [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap OCEAN_FLOOR_WG             [37 longs] confere com "bloco mais alto" em 0/256 colunas; amostra [35, 35, 35, 35]
+heightmap WORLD_SURFACE              [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap WORLD_SURFACE_WG           [37 longs] confere com "bloco mais alto" em 256/256 colunas; amostra [63, 63, 63, 63]
+heightmap OCEAN_FLOOR                [37 longs] confere com "bloco mais alto" em 0/256 colunas; amostra [35, 35, 35, 35]
+dados de luz nas seções: nenhum | isLightOn = None
+
+## borda (structure_starts): Status=minecraft:structure_starts DataVersion=5023 pos=(0,96) yPos=-4
+seções: 24 (Y de -4 a 19)
+chaves nas seções: {'Y': 24, 'biomes': 24, 'block_states': 24}
+biomas (células 4x4x4): {'minecraft:plains': 1536}
+blocos mais comuns: air=98304
+dados de luz nas seções: nenhum | isLightOn = None
+
+## Estrutura completa de um chunk "full" (DataVersion 5023)
+xPos: Int = 5
+yPos: Int = -4
+block_ticks: List<End>[0]
+zPos: Int = 0
+InhabitedTime: Long = 12879
+sections: List<Compound>[25]
+  [0]:
+    Y: Byte = -5
+    starlight.skylight_state: Int = 1
+    starlight.blocklight_state: Int = 1
+isLightOn: Byte = 0
+blending_data: Compound
+  max_section: Int = 20
+  min_section: Int = -4
+PostProcessing: List<List>[24]
+  [0]:
+Status: String = 'minecraft:full'
+DataVersion: Int = 5023
+structures: Compound
+  References: Compound
+    minecraft:mineshaft: LongArray[1]
+  starts: Compound
+fluid_ticks: List<End>[0]
+Heightmaps: Compound
+  MOTION_BLOCKING: LongArray[37]
+  MOTION_BLOCKING_NO_LEAVES: LongArray[37]
+  WORLD_SURFACE: LongArray[37]
+  OCEAN_FLOOR: LongArray[37]
+block_entities: List<End>[0]
+starlight.light_version: Int = 10
+LastUpdate: Long = 8978078
+
+## Uma seção (Y=4) do chunk "full"
+BlockLight: ByteArray[2048]
+Y: Byte = 4
+starlight.skylight_state: Int = 2
+SkyLight: ByteArray[2048]
+biomes: Compound
+  palette: List<String>[1]
+    = ['minecraft:mushroom_fields']
+starlight.blocklight_state: Int = 2
+block_states: Compound
+  data: LongArray[256]
+  palette: List<Compound>[16]
+    [0]:
+      : String = 'minecraft:stone'

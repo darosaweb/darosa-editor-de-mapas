@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>daRosa - Editor de Mapas</title>
+  <meta name="description" content="daRosa - Editor de Mapas: pinte biomas e relevo e transforme o desenho num mundo de Minecraft.">
+  <meta name="theme-color" content="#cc3467">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="simples">
+  <header class="topo">
+    <h1 class="marca">
+      <img src="img/logo.png" alt="" width="34" height="34">
+      <b>daRosa</b> <span>Editor de Mapas</span>
+    </h1>
+    <input id="nome" class="nome" value="meu-mapa" title="Nome do mapa" aria-label="Nome do mapa">
+    <span id="statusSalvo" class="status-salvo" title="O mapa é guardado sozinho neste navegador enquanto você desenha">…</span>
+    <div class="acoes">
+      <button id="btnNovo" title="Começar um mapa novo (o atual continua guardado)">✨ Novo</button>
+      <button id="btnAbrir" title="Ver todos os mapas guardados e as versões antigas">📁 Meus mapas</button>
+      <button id="btnSalvar" title="Baixar o mapa num arquivo (.mcmapa)">💾 Salvar</button>
+      <button id="btnExportar" title="Exportar imagens do mapa">🖼️ Exportar</button>
+      <span class="sep"></span>
+      <button id="btnDesfazer" title="Desfazer (Ctrl+Z)">↶ Desfazer</button>
+      <button id="btnRefazer" title="Refazer (Ctrl+Y)">↷ Refazer</button>
+      <span class="sep"></span>
+      <label class="chave" title="Mostrar mais controles">
+        <input type="checkbox" id="chkAvancado"> <span>Modo avançado</span>
+      </label>
+    </div>
+    <input type="file" id="arquivo" accept=".mcmapa,.mcbackup,.json" hidden>
+  </header>
+
+  <main class="area">
+    <aside class="painel esquerda">
+      <section>
+        <h2>Ferramenta</h2>
+        <div id="ferramentas" class="grade-botoes"></div>
+      </section>
+      <section>
+        <h2>Tamanho do pincel</h2>
+        <div class="tamanhos simples-so">
+          <button data-tam="4" class="tam">●<small>Pequeno</small></button>
+          <button data-tam="10" class="tam">⬤<small>Médio</small></button>
+          <button data-tam="24" class="tam grande">⬤<small>Grande</small></button>
+        </div>
+        <div class="avancado">
+          <label class="linha">Raio <input type="range" id="rngRaio" min="1" max="100" value="10"> <output id="outRaio">10</output></label>
+          <label class="linha">Força <input type="range" id="rngForca" min="5" max="100" value="50"> <output id="outForca">50%</output></label>
+        </div>
+      </section>
+      <section id="secBiomas">
+        <h2>Biomas</h2>
+        <div id="biomas" class="biomas"></div>
+      </section>
+    </aside>
+
+    <section class="centro">
+      <div class="palco"><canvas id="mapa"></canvas></div>
+      <div class="barra-mapa">
+        <div class="vistas" role="group" aria-label="Como ver o mapa">
+          <button data-vista="bioma" class="ativo">🎨 Biomas</button>
+          <button data-vista="altura">⛰️ Altura</button>
+        </div>
+        <div id="info" class="info">Passe o mouse no mapa</div>
+        <div class="zoom">
+          <button id="zoomMenos" title="Afastar">−</button>
+          <button id="zoomAjustar" title="Ver o mapa inteiro">⤢</button>
+          <button id="zoomMais" title="Aproximar">+</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="painel direita">
+      <section class="sec3d">
+        <h2>Visão 3D <small>arraste para girar</small></h2>
+        <canvas id="tela3d"></canvas>
+      </section>
+      <section class="avancado">
+        <h2>Ajustes</h2>
+        <label class="linha">Nível do mar <input type="number" id="numMar" min="-40" max="200" value="63"></label>
+        <label class="linha"><input type="checkbox" id="chkMagico" checked> Pincel mágico <small>(oceano e rio afundam o terreno; terra sobe acima da água)</small></label>
+        <label class="linha"><input type="checkbox" id="chkNivelClique" checked> Nivelar na altura do clique</label>
+        <label class="linha">Altura do nivelar <input type="number" id="numNivel" min="-56" max="300" value="70"></label>
+        <label class="linha">Exagero 3D <input type="range" id="rngExagero" min="10" max="40" value="15"></label>
+        <label class="linha"><input type="checkbox" id="chkRelevo" checked> Sombra do relevo no mapa</label>
+        <label class="linha"><input type="checkbox" id="chkGrade"> Grade de chunks (16×16)</label>
+        <p class="dica" id="tamanhoInfo"></p>
+      </section>
+      <section class="ajuda simples-so">
+        <h2>Como usar</h2>
+        <ul>
+          <li>Escolha uma <b>ferramenta</b> e pinte no mapa.</li>
+          <li><b>Roda do mouse</b>: aproximar e afastar.</li>
+          <li><b>Botão direito</b> arrastando: mover o mapa.</li>
+          <li>Errou? <b>↶ Desfazer</b>.</li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="dlgNovo">
+    <form method="dialog">
+      <h2>✨ Mapa novo</h2>
+      <p>Que tipo de começo?</p>
+      <div class="opcoes" id="tiposNovo">
+        <label><input type="radio" name="tipo" value="ilha" checked><span>🏝️<b>Ilha</b></span></label>
+        <label><input type="radio" name="tipo" value="planicie"><span>🌾<b>Planície</b></span></label>
+        <label><input type="radio" name="tipo" value="oceano"><span>🌊<b>Só oceano</b></span></label>
+      </div>
+      <p>Tamanho</p>
+      <div class="opcoes">
+        <label><input type="radio" name="tam" value="256" checked><span>🟩<b>Pequeno</b><small>256 × 256</small></span></label>
+        <label><input type="radio" name="tam" value="512"><span>🟩🟩<b>Médio</b><small>512 × 512</small></span></label>
+        <label><input type="radio" name="tam" value="1024"><span>🟩🟩🟩<b>Grande</b><small>1024 × 1024</small></span></label>
+      </div>
+      <p class="dica">O mapa de agora não some: ele continua guardado em 📁 Meus mapas.</p>
+      <menu>
+        <button value="cancelar">Cancelar</button>
+        <button value="ok" class="primario">Criar</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="dlgExportar">
+    <form method="dialog">
+      <h2>🖼️ Exportar</h2>
+      <div class="opcoes">
+        <button value="png-bioma" class="op"><span>🎨<b>Imagem dos biomas</b></span></button>
+        <button value="png-altura" class="op"><span>⛰️<b>Imagem da altura</b></span></button>
+      </div>
+      <p class="dica">Para o Minecraft, o gerador usa o arquivo do projeto (💾 Salvar). A geração do mundo vem na próxima etapa.</p>
+      <menu><button value="cancelar">Fechar</button></menu>
+    </form>
+  </dialog>
+
+  <dialog id="dlgMapas" class="largo">
+    <div class="mapas-topo">
+      <button id="mapasVoltar" hidden>← Voltar</button>
+      <h2 id="mapasTitulo">📁 Meus mapas</h2>
+      <button id="mapasFechar" title="Fechar">✕</button>
+    </div>
+    <div id="mapasLista" class="mapas-lista"></div>
+    <div id="mapasAcoes" class="mapas-acoes">
+      <button id="mapasArquivo" title="Abrir um arquivo .mcmapa ou um backup .mcbackup">📂 Abrir arquivo…</button>
+      <button id="mapasBackup" title="Baixar um arquivo com todos os mapas deste navegador">⬇️ Baixar backup de todos</button>
+    </div>
+    <p class="dica">Os mapas ficam guardados <b>neste navegador, neste computador</b>. Para levar a outro lugar ou ter uma cópia segura, use 💾 Salvar ou o backup.</p>
+  </dialog>
+
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

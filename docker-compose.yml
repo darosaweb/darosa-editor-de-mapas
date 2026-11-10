@@ -1,0 +1,10 @@
+services:
+  editor:
+    image: nginx:1.27-alpine
+    container_name: minicraft-editor
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8772:80"   # editor de mapas; so este PC
+    volumes:
+      - ./editor:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
