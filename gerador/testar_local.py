@@ -84,6 +84,20 @@ def main(saida):
         print(f'    {time.time() - t0:5.0f}s  prontos {full}/{total}  {dict(st)}')
         if full >= total or time.time() - t0 > 900:
             break
+    # vilas marcadas no editor: o próprio Minecraft constrói (casas, caminhos, aldeões)
+    vilas = info.get('vilas') or []
+    resultado_vilas = []
+    for v in vilas:
+        resp = r.cmd(f'place structure {v["estrutura"]} {v["x"]} {v["y"]} {v["z"]}')
+        ok = 'Generated' in resp or 'gerad' in resp.lower()
+        resultado_vilas.append({**v, 'ok': ok, 'resposta': resp.strip()})
+        print(f'    vila {v["estrutura"]} em X {v["x"]} Z {v["z"]}: {"✓" if ok else "✗ " + resp.strip()}')
+    if vilas:
+        time.sleep(5)          # deixa o servidor terminar de colocar as peças das vilas
+        r.cmd('save-all flush')
+    info['vilas_resultado'] = resultado_vilas
+    json.dump(info, open(os.path.join(saida, 'info.json'), 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+
     r.cmd('forceload remove all')
     r.cmd('save-all flush')
     time.sleep(2)

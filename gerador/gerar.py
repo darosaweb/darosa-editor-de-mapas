@@ -14,6 +14,7 @@ import gzip
 import json
 import math
 import os
+import random
 import struct
 import sys
 import time
@@ -29,7 +30,13 @@ SEC_MIN, SEC_MAX = -4, 19    # 24 seções
 
 AIR, WATER, STONE, DEEPSLATE, BEDROCK = ('minecraft:air', 'minecraft:water', 'minecraft:stone',
                                          'minecraft:deepslate', 'minecraft:bedrock')
-OCEAN_DEPTH = 14             # profundidade do oceano em volta do desenho
+CAVE_AIR, LAVA = 'minecraft:cave_air', 'minecraft:lava'
+CAVE_CHANCE = 0.14           # chance de um chunk do desenho começar um sistema de cavernas
+CAVE_MIN_Y = -59             # não escava a camada de bedrock
+CAVE_TETO = 5                # blocos de rocha preservados embaixo do chão (terra)
+CAVE_TETO_AGUA = 6           # idem embaixo de água (não inunda as cavernas)
+LAVA_Y = -55                 # abaixo disso a caverna fica com lava, como no Minecraft normal
+OCEAN_DEPTH = 14            # profundidade do oceano em volta do desenho
 BLEND = 24                   # blocos para o terreno descer suavemente até o oceano fora do desenho
 
 AQUATIC = {'minecraft:ocean', 'minecraft:warm_ocean', 'minecraft:frozen_ocean', 'minecraft:river',
@@ -137,7 +144,52 @@ def surface_layers(biome, top, sea, slope, wx, wz):
 
 
 # ---------------------------------------------------------------- chunk
-def build_chunk(world, cx, cz):
+def plan_caves(world, cx0, cz0, cx1, cz1, seed):
+    """Planeja as cavernas do desenho: túneis sinuosos e algumas salas.
+    Devolve {(cx, cz): [(x, y, z, raio, achatamento), ...]} com as esferas que tocam cada chunk."""
+    spheres = []
+    for cz in range(cz0, cz1 + 1):
+        for cx in range(cx0, cx1 + 1):
+            # semente estável por chunk (o mesmo mapa gera sempre as mesmas cavernas)
+            rng = random.Random(((seed * 73856093) ^ (cx * 19349663) ^ (cz * 83492791) ^ 0x5EED) & 0xFFFFFFFF)
+            if rng.random() >= CAVE_CHANCE:
+                continue
+            x, z = cx * 16 + rng.random() * 16, cz * 16 + rng.random() * 16
+            top, _ = world.column(int(x), int(z))
+            y_max = min(48, top - 12)
+            if y_max < -48:
+                continue
+            y = rng.uniform(-50, y_max)
+            if rng.random() < 0.25:   # sala grande no começo
+                spheres.append((x, y, z, rng.uniform(5, 9), 0.55))
+            for _ in range(rng.randint(1, 3)):
+                tx, ty, tz = x, y, z
+                yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.35, 0.35)
+                dyaw = 0.0
+                comp = rng.randint(50, 140)
+                base_r = rng.uniform(1.6, 3.2)
+                for i in range(comp):
+                    tx += math.cos(yaw) * math.cos(pitch)
+                    tz += math.sin(yaw) * math.cos(pitch)
+                    ty += math.sin(pitch)
+                    dyaw = dyaw * 0.75 + rng.uniform(-1, 1) * 0.18
+                    yaw += dyaw
+                    pitch = pitch * 0.9 + rng.uniform(-1, 1) * 0.09
+                    if ty < CAVE_MIN_Y + 2:
+                        pitch = abs(pitch)
+                    r = base_r * (0.75 + 0.5 * math.sin(math.pi * i / comp))
+                    if i % max(1, int(r / 1.5)) == 0:
+                        spheres.append((tx, ty, tz, r, 1.0))
+    by_chunk = {}
+    for s in spheres:
+        x, _, z, r, _ = s
+        for ccz in range(math.floor((z - r) / 16), math.floor((z + r) / 16) + 1):
+            for ccx in range(math.floor((x - r) / 16), math.floor((x + r) / 16) + 1):
+                by_chunk.setdefault((ccx, ccz), []).append(s)
+    return by_chunk, len(spheres)
+
+
+def build_chunk(world, cx, cz, caves=None):
     sea = world.sea
     # alturas com 1 bloco de margem (para medir inclinação)
     hgt = {}
@@ -162,7 +214,38 @@ def build_chunk(world, cx, cz):
     max_top, min_top = max(tops), min(tops)
     min_surf = min(min(c[1]) if c[1] else c[0] for c in cols)
 
-    def block(c, y):
+    # cavernas: blocos escavados por esferas que passam por este chunk
+    carved = set()
+    carved_secs = set()
+    bx0, bz0 = cx * 16, cz * 16
+    for (sx, sy, sz, r, vs) in caves or ():
+        ry = r * vs
+        xa, xb = max(0, math.floor(sx - r) - bx0), min(15, math.ceil(sx + r) - bx0)
+        za, zb = max(0, math.floor(sz - r) - bz0), min(15, math.ceil(sz + r) - bz0)
+        if xa > xb or za > zb:
+            continue
+        for y in range(max(CAVE_MIN_Y, math.floor(sy - ry)), math.ceil(sy + ry) + 1):
+            dy = (y + 0.5 - sy) / ry
+            dy2 = dy * dy
+            if dy2 > 1:
+                continue
+            for z in range(za, zb + 1):
+                dz = (bz0 + z + 0.5 - sz) / r
+                rest = 1 - dy2 - dz * dz
+                if rest < 0:
+                    continue
+                for x in range(xa, xb + 1):
+                    dx = (bx0 + x + 0.5 - sx) / r
+                    if dx * dx <= rest:
+                        ci = z * 16 + x
+                        top = tops[ci]
+                        if y <= top - (CAVE_TETO_AGUA if top < sea - 1 else CAVE_TETO):
+                            carved.add((y - MIN_Y) * 256 + ci)
+                            carved_secs.add(y >> 4)
+
+    def block(c, y, ci=None):
+        if carved and ci is not None and (y - MIN_Y) * 256 + ci in carved:
+            return LAVA if y <= LAVA_Y else CAVE_AIR
         top, surf, wx, wz = c
         if y > top:
             return WATER if y < sea else AIR
@@ -183,7 +266,9 @@ def build_chunk(world, cx, cz):
     for sy in range(SEC_MIN, SEC_MAX + 1):
         base = sy * 16
         top_y = base + 15
-        if base > max_top and base >= sea:
+        if sy in carved_secs:
+            uniform = None
+        elif base > max_top and base >= sea:
             uniform = AIR
         elif top_y < min_surf and base >= 8:
             uniform = STONE
@@ -197,8 +282,8 @@ def build_chunk(world, cx, cz):
             palette = {}
             idx = []
             for y in range(base, base + 16):
-                for c in cols:
-                    name = block(c, y)
+                for ci, c in enumerate(cols):
+                    name = block(c, y, ci)
                     i = palette.get(name)
                     if i is None:
                         i = palette[name] = len(palette)
@@ -290,6 +375,7 @@ def main():
     ap.add_argument('projeto')
     ap.add_argument('saida')
     ap.add_argument('--anel', type=int, default=8, help='chunks de oceano em volta do desenho (padrão 8)')
+    ap.add_argument('--sem-cavernas', action='store_true', help='não escava cavernas')
     a = ap.parse_args()
 
     p, w, h, heights, biomes = load_project(a.projeto)
@@ -303,11 +389,16 @@ def main():
     os.makedirs(os.path.join(a.saida, 'region'), exist_ok=True)
     regions = {}
     t0 = time.time()
+    caves, n_esferas = {}, 0
+    if not a.sem_cavernas:
+        caves, n_esferas = plan_caves(world, world.ox // 16, world.oz // 16,
+                                      (world.ox + w) // 16 - 1, (world.oz + h) // 16 - 1, int(p.get('semente') or 0))
+        print(f'  cavernas planejadas: {n_esferas} trechos')
     total = (c1x - c0x + 1) * (c1z - c0z + 1)
     done = 0
     for cz in range(c0z, c1z + 1):
         for cx in range(c0x, c1x + 1):
-            raw = dumps(build_chunk(world, cx, cz))
+            raw = dumps(build_chunk(world, cx, cz, caves.get((cx, cz))))
             regions.setdefault((cx >> 5, cz >> 5), {})[(cx & 31, cz & 31)] = raw
             done += 1
         print(f'\r  chunks: {done}/{total}', end='', flush=True)

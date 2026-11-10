@@ -52,11 +52,13 @@ Abra <http://127.0.0.1:8772>. Os arquivos em `editor/` são servidos direto; edi
 Transforma o `.mcmapa` em arquivos de região Anvil (`.mca`) do Minecraft **26.3** (DataVersion 5023).
 Só biblioteca padrão do Python.
 
-Cada chunk é gravado com status **`terrain`** (pedra, água, superfície e biomas prontos). No 26.x a Mojang juntou as antigas
-etapas *noise*, *surface* e *carvers* numa só; então o gerador faz a superfície e o **Minecraft completa o resto**
-(árvores, flores, minérios, neve, luz) conforme cada bioma. Detalhes: [analise/ESTRUTURA.md](analise/ESTRUTURA.md).
+Cada chunk é gravado com status **`terrain`** (pedra, água, superfície, biomas e **cavernas** prontos). No 26.x a Mojang
+juntou as antigas etapas *noise*, *surface* e *carvers* numa só; então o gerador faz a superfície e as cavernas e o
+**Minecraft completa o resto** (árvores, flores, minérios, neve, luz) conforme cada bioma. As **vilas** marcadas no editor
+são construídas pelo próprio Minecraft com `/place structure`. Detalhes: [analise/ESTRUTURA.md](analise/ESTRUTURA.md).
 
-- `gerador/gerar.py` — **projeto `.mcmapa` → regiões `.mca`** (com anel de oceano em volta do desenho)
+- `gerador/criar_mundo.py` — **um comando só: `.mcmapa` → mundo pronto** + imagem + relatório (usa os scripts abaixo)
+- `gerador/gerar.py` — projeto `.mcmapa` → regiões `.mca` (terreno, cavernas, anel de oceano em volta do desenho)
 - `gerador/testar_local.py` — põe o mapa num Paper de teste local, completa os chunks e desliga
 - `gerador/renderizar.py` — imagem vista de cima + contagem de árvores, minérios, neve…
 - `gerador/nbt.py`, `gerador/anvil.py`, `gerador/chunkfmt.py` — ler/gravar NBT, regiões e a compactação dos chunks
@@ -72,19 +74,17 @@ Os programas do servidor **não vêm no repositório** (a Mojang não permite re
 como `teste-servidor/dados/server.properties` e aceite o [EULA](https://aka.ms/MinecraftEULA) em `teste-servidor/dados/eula.txt`.
 
 ```bash
-python -I -X utf8 gerador/gerar.py mapas/meu-mapa.mcmapa saida/meu-mapa
+python -I -X utf8 gerador/criar_mundo.py mapas/meu-mapa.mcmapa
 ```
 
-```bash
-python -I -X utf8 gerador/testar_local.py saida/meu-mapa
-```
+Em uns 2 minutos (mapa 256×256) sai em `saida/meu-mapa/`:
 
-```bash
-python -I -X utf8 gerador/renderizar.py teste-servidor/dados/world/dimensions/minecraft/overworld/region saida/meu-mapa/info.json saida/meu-mapa/depois.png
-```
+- `mundo-pronto/` — `region/`, `entities/` e `poi/` com os chunks **prontos** (status `full`, vilas com aldeões):
+  o servidor de verdade não precisa gerar nada (bom para servidores fracos, como uma Raspberry Pi);
+- `mundo.png` e `mundo-desenho.png` — o mundo visto de cima;
+- `relatorio.txt` — spawn, borda, vilas, contagem de árvores/minérios/cavernas, arquivos e comandos para instalar.
 
-Depois disso, os arquivos de `teste-servidor/dados/world/dimensions/minecraft/overworld/region` são chunks **prontos**:
-o servidor de verdade não precisa gerar nada (bom para servidores fracos, como uma Raspberry Pi).
+Opções: `--sem-cavernas`, `--anel N` (chunks de oceano em volta; padrão 8).
 
 ## Formato do projeto (`.mcmapa`)
 

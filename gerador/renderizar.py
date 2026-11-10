@@ -26,7 +26,8 @@ CORES = {
     'lily_pad': (32, 128, 48), 'mud': (60, 57, 60), 'moss_block': (89, 109, 45),
     'terracotta': (152, 94, 67), 'orange_terracotta': (161, 83, 37), 'yellow_terracotta': (186, 133, 35),
     'white_terracotta': (209, 178, 161), 'red_terracotta': (143, 61, 46), 'light_gray_terracotta': (135, 107, 98),
-    'brown_terracotta': (77, 51, 35), 'red_mushroom_block': (200, 46, 45), 'brown_mushroom_block': (149, 111, 81),
+    'brown_terracotta': (77, 51, 35), 'dirt_path': (148, 122, 65), 'bell': (250, 210, 60),
+    'pink_petals': (245, 160, 200), 'cherry_leaves': (240, 170, 205), 'red_mushroom_block': (200, 46, 45), 'brown_mushroom_block': (149, 111, 81),
     'mushroom_stem': (203, 196, 185), 'pumpkin': (198, 118, 24), 'melon': (111, 145, 30), 'bamboo': (93, 144, 19),
 }
 
@@ -108,6 +109,9 @@ def main(region_dir, info_path, out):
         'neve (camada)': all_blocks.get('minecraft:snow', 0),
         'gelo': all_blocks.get('minecraft:ice', 0),
         'cactos': all_blocks.get('minecraft:cactus', 0),
+        'sinos de vila': all_blocks.get('minecraft:bell', 0),
+        'camas': soma(lambda k: k.endswith('_bed')),
+        'ar de caverna': all_blocks.get('minecraft:cave_air', 0),
         'flores/plantas': soma(lambda k: any(t in k for t in ('flower', 'tulip', 'poppy', 'dandelion', 'petals', 'grass', 'fern', 'bush'))),
         'biomas (células)': dict(biome_cells.most_common()),
     }

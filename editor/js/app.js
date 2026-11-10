@@ -166,7 +166,14 @@ function placeMarker(p) {
     if (vilas.some(v => dist(v) < VILA_DIST_MIN)) { avisar('🏘️ Muito perto de outra vila — deixe mais espaço'); return; }
     map.changeMarkers(mk => { mk.vilas.push({ x, z }); });
     const b = BIOMES[map.biome[map.idx(x | 0, z | 0)]];
-    avisar(`🏘️ Vila de ${VILA_NOMES[tipoDeVila(b.id)]} marcada!`);
+    // vilas do Minecraft se espalham uns 50–80 blocos: avisa se tem água ou borda por perto
+    let pertoDaAgua = false;
+    for (let k = 0; k < 16 && !pertoDaAgua; k++) {
+      const a = k * Math.PI / 8, px = x + Math.cos(a) * 40, pz = z + Math.sin(a) * 40;
+      pertoDaAgua = px < 0 || pz < 0 || px >= map.w || pz >= map.h || map.isWater(px, pz);
+    }
+    avisar(`🏘️ Vila de ${VILA_NOMES[tipoDeVila(b.id)]} marcada!` +
+      (pertoDaAgua ? ' Dica: vilas são grandes — perto da água os caminhos podem chegar até a praia.' : ''));
   }
   updateUndoButtons();
 }
