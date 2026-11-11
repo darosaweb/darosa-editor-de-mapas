@@ -114,6 +114,8 @@ def surface_layers(biome, top, sea, slope, wx, wz):
             mat = ['minecraft:sand'] * 3 + ['minecraft:sandstone']
         elif biome == 'minecraft:swamp':
             mat = ['minecraft:dirt'] * 3
+        elif biome == 'minecraft:mangrove_swamp':
+            mat = ['minecraft:mud'] * 3 + ['minecraft:dirt']
         else:
             mat = (['minecraft:gravel'] if rnd(wx, 0, wz, 7) < 0.6 else ['minecraft:sand']) * 3
             if rnd(wx, 1, wz, 8) < 0.04:
@@ -128,6 +130,8 @@ def surface_layers(biome, top, sea, slope, wx, wz):
         mat = ['minecraft:red_sand'] + [BADLANDS_BANDS[(top - 1 - i) % len(BADLANDS_BANDS)] for i in range(12)]
     elif biome == 'minecraft:mushroom_fields':
         mat = ['minecraft:mycelium'] + ['minecraft:dirt'] * 3
+    elif biome == 'minecraft:mangrove_swamp':     # manguezal: chão de lama, como no Minecraft normal
+        mat = ['minecraft:mud'] * 3 + ['minecraft:dirt']
     elif biome == 'minecraft:stony_peaks':
         mat = ['minecraft:stone'] if rnd(wx, top, wz, 3) < 0.8 else ['minecraft:calcite']
     elif biome in AQUATIC:   # oceano/rio pintado mas acima da água: praia

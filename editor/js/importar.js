@@ -56,7 +56,7 @@ function sugerir([r, g, b]) {
     return B('taiga');                                              // verde-escuro
   }
   if (h >= 40 && h < 70) return s > 0.7 ? B('desert') : B('savanna');            // amarelos
-  if (h >= 18 && h < 40) return s > 0.6 ? B('badlands') : B('dark_forest');      // laranja / marrom
+  if (h >= 18 && h < 40) return s > 0.6 ? B('dappled_forest') : B('dark_forest'); // laranja (outono) / marrom
   if (h >= 260 || h < 18) {
     if (s < 0.45) return B('dark_forest');                          // marrom (fica rosado na foto)
     return l > 0.66 ? B('cherry_grove') : B('mushroom_fields');     // rosa-claro / vermelho
@@ -284,7 +284,7 @@ function montarMapa(st, opcoes) {
   if (opcoes.praias) {
     const dOceano = bfs(W, H, isOceano, 4).dist;
     const semPraia = new Set(['minecraft:desert', 'minecraft:badlands', 'minecraft:snowy_plains', 'minecraft:snowy_taiga',
-      'minecraft:stony_peaks', 'minecraft:mushroom_fields']);
+      'minecraft:stony_peaks', 'minecraft:mushroom_fields', 'minecraft:swamp', 'minecraft:mangrove_swamp']);
     for (let i = 0; i < n; i++) if (!agua(i) && !montanha[i] && dOceano[i] <= 3 && !semPraia.has(BIOMES[bio[i]].id)) bio[i] = B('beach');
   }
 
@@ -297,6 +297,9 @@ function montarMapa(st, opcoes) {
     if (agua(i)) {
       const prof = BIOMES[bio[i]].profundidade || 10;
       h = sea - Math.min(prof, 1 + dTerra[i] * 0.7);
+    } else if (BIOMES[bio[i]].rente && !montanha[i]) {
+      // pântano / manguezal: no nível da água, com poças
+      h = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
     } else {
       const d = Math.min(dAgua[i], 24);
       h = sea + 1 + d * 0.45 + (fbm(x / 40, y / 40, seed, 4) - 0.5) * 10 * Math.min(1, d / 8);
@@ -316,7 +319,8 @@ function montarMapa(st, opcoes) {
       let s = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += src[i + dy * W + dx];
       let v = s / 9;
-      if (agua(i)) v = Math.min(v, sea - 1); else v = Math.max(v, sea);
+      if (agua(i)) v = Math.min(v, sea - 1);
+      else if (!BIOMES[bio[i]].rente) v = Math.max(v, sea);
       m.height[i] = v;
     }
   }

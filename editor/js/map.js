@@ -173,7 +173,7 @@ export class WorldMap {
   }
   isWater(x, z) {
     const i = this.idx(Math.floor(x), Math.floor(z));
-    return this.height[i] < this.seaLevel || BIOMES[this.biome[i]].agua;
+    return Math.round(this.height[i]) < this.seaLevel || BIOMES[this.biome[i]].agua;
   }
   // ---------- pincéis ----------
   // tool: 'bioma' | 'subir' | 'descer' | 'suavizar' | 'nivelar' | 'montanha' | 'rio'
@@ -215,6 +215,10 @@ export class WorldMap {
             if (bio.agua) {
               const alvo = sea - bio.profundidade;
               if (H[i] > alvo) H[i] += (alvo - H[i]) * fall * 0.35;
+            } else if (bio.rente) {
+              // alagadiço: o chão fica em volta do nível da água, com poças
+              const alvo = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
+              H[i] += (alvo - H[i]) * fall * 0.35;
             } else if (H[i] < sea + 2) {
               H[i] += (sea + 2 - H[i]) * fall * 0.35;
             }
