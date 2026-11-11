@@ -16,3 +16,6 @@ __pycache__/
 .claude/
 Thumbs.db
 .DS_Store
+
+# fotos de teste (desenhos das criancas) - nunca publicar
+editor/_teste/

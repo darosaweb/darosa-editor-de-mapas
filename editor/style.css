@@ -189,6 +189,42 @@ dialog.largo { width: min(640px, calc(100vw - 32px)); }
 .mapa-botoes { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .mapas-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* ---------- Importar desenho ---------- */
+dialog.importar { width: min(1100px, calc(100vw - 24px)); height: min(860px, calc(100vh - 24px)); position: relative; }
+dialog.importar[open] { display: flex; flex-direction: column; gap: 8px; }
+dialog.importar > section:not([hidden]) { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+dialog.importar p { margin: 4px 0; }
+.imp-passo1 { align-items: center; justify-content: center; text-align: center; }
+.botao-foto input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.botao-foto span {
+  display: inline-block; padding: 18px 28px; font-size: 20px; font-weight: 600; cursor: pointer;
+  background: var(--ativo); color: var(--ativo-texto); border-radius: 14px;
+}
+.botao-foto input:focus-visible + span { outline: 3px solid var(--rosa); outline-offset: 3px; }
+.imp-cantos { flex: 1; min-height: 0; width: 100%; touch-action: none; background: var(--botao); border-radius: 10px; }
+.imp-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.imp-barra label { display: flex; align-items: center; gap: 6px; }
+.imp-barra select { font: inherit; padding: 4px; border-radius: 6px; }
+.espaco { flex: 1; }
+.imp-cores-area { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 340px; gap: 12px; }
+.imp-previa { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; background: var(--fundo-mapa); border-radius: 10px; min-height: 0; }
+.imp-cores { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.imp-cor { display: grid; grid-template-columns: 34px 46px 1fr; align-items: center; gap: 8px; padding: 4px; border-radius: 8px; }
+.imp-cor:hover { background: var(--botao); }
+.imp-cor .amostra { width: 34px; height: 26px; border-radius: 6px; border: 1px solid rgba(0,0,0,.3); }
+.imp-cor small { color: var(--suave); text-align: right; }
+.imp-cor select { font: inherit; padding: 4px; border-radius: 6px; min-width: 0; }
+.imp-pequenas summary { cursor: pointer; color: var(--suave); padding: 6px 4px; }
+.imp-pequenas[open] { display: flex; flex-direction: column; gap: 6px; }
+.imp-processando {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; font-weight: 600;
+  background: color-mix(in srgb, var(--painel) 85%, transparent); border-radius: 14px;
+}
+.imp-processando[hidden] { display: none; }
+@media (max-width: 760px) {
+  .imp-cores-area { grid-template-columns: 1fr; grid-template-rows: 45% 1fr; }
+}
+
 /* ---------- aviso flutuante ---------- */
 .aviso {
   position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%) translateY(20px);

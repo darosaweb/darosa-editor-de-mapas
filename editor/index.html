@@ -20,6 +20,7 @@
     <span id="statusSalvo" class="status-salvo" title="O mapa é guardado sozinho neste navegador enquanto você desenha">…</span>
     <div class="acoes">
       <button id="btnNovo" title="Começar um mapa novo (o atual continua guardado)">✨ Novo</button>
+      <button id="btnImportar" title="Criar um mapa a partir da foto de um desenho no papel">📷 Importar desenho</button>
       <button id="btnAbrir" title="Ver todos os mapas guardados e as versões antigas">📁 Meus mapas</button>
       <button id="btnSalvar" title="Baixar o mapa num arquivo (.mcmapa)">💾 Salvar</button>
       <button id="btnExportar" title="Exportar imagens do mapa">🖼️ Exportar</button>
@@ -154,6 +155,59 @@
       <button id="mapasBackup" title="Baixar um arquivo com todos os mapas deste navegador">⬇️ Baixar backup de todos</button>
     </div>
     <p class="dica">Os mapas ficam guardados <b>neste navegador, neste computador</b>. Para levar a outro lugar ou ter uma cópia segura, use 💾 Salvar ou o backup.</p>
+  </dialog>
+
+  <dialog id="dlgImportar" class="importar">
+    <div class="mapas-topo">
+      <h2>📷 Importar desenho</h2>
+      <button id="impFechar" title="Fechar">✕</button>
+    </div>
+
+    <section data-passo="1" class="imp-passo1">
+      <p>Tire uma foto do mapa desenhado no papel — <b>de cima</b>, com <b>boa luz</b> e a <b>folha inteira</b> aparecendo.
+        Cada cor do desenho vai virar um bioma.</p>
+      <label class="botao-foto">
+        <input type="file" id="impArquivo" accept="image/*">
+        <span>📷 Escolher a foto</span>
+      </label>
+      <p class="dica">A foto não sai deste aparelho: tudo é feito aqui no navegador.</p>
+    </section>
+
+    <section data-passo="2" hidden>
+      <p><b>Passo 2:</b> arraste as 4 bolinhas para os cantos do desenho.</p>
+      <canvas id="impCantos" class="imp-cantos"></canvas>
+      <div class="imp-barra">
+        <button id="impVoltar1">← Outra foto</button>
+        <button id="impCantosReset">Achar a folha</button>
+        <button id="impCantosTudo">Foto inteira</button>
+        <label>Tamanho do mapa
+          <select id="impTamanho">
+            <option value="256">Pequeno (256)</option>
+            <option value="512" selected>Médio (512)</option>
+            <option value="1024">Grande (1024)</option>
+          </select>
+        </label>
+        <span class="espaco"></span>
+        <button id="impProximo" class="primario">Próximo: cores →</button>
+      </div>
+    </section>
+
+    <section data-passo="3" hidden>
+      <p><b>Passo 3:</b> diga qual bioma é cada cor (igual à legenda do desenho). Passe o mouse numa cor para ver onde ela está.</p>
+      <div class="imp-cores-area">
+        <canvas id="impPrevia" class="imp-previa"></canvas>
+        <div id="impCores" class="imp-cores"></div>
+      </div>
+      <div class="imp-barra">
+        <button id="impVoltar2">← Cantos</button>
+        <label><input type="checkbox" id="impPraias" checked> Praias na costa</label>
+        <label title="A margem da folha e a legenda, se não foram pintadas, viram mar"><input type="checkbox" id="impBordaMar" checked> Papel em branco na borda vira mar</label>
+        <span class="espaco"></span>
+        <button id="impCriar" class="primario">✨ Criar mapa</button>
+      </div>
+    </section>
+
+    <div id="impProcessando" class="imp-processando" hidden>⏳ Transformando o desenho…</div>
   </dialog>
 
   <div id="aviso" class="aviso" role="status" aria-live="polite"></div>

@@ -13,7 +13,11 @@ veja a prévia em 3D, e um gerador transforma o desenho num **mundo jogável** (
 
 ## O que o editor faz
 
-- **Pincéis de bioma** (21 biomas vanilla, com cores, emojis e legenda) e **balde** para pintar áreas inteiras.
+- **📷 Importar desenho**: tire a foto de um mapa desenhado no papel com lápis de cor; ajuste os 4 cantos da folha,
+  diga qual bioma é cada cor (como na legenda do desenho) e o editor monta o mapa com relevo — mar e rios fundos,
+  terra acima da água, cinza vira montanha, praias na costa. Contornos e letras são apagados sozinhos.
+  Tudo roda no navegador: a foto não sai do aparelho.
+- **Pincéis de bioma** (22 biomas vanilla, incluindo o Jardim pálido, com cores, emojis e legenda) e **balde** para pintar áreas inteiras.
 - **Pincéis de terreno**: subir, descer, montanha, rio, alisar e nivelar; tamanho e força ajustáveis.
 - **Pincel mágico**: pintar oceano/rio afunda o terreno; pintar terra sobre a água levanta o chão.
 - **🏠 Nascer aqui**: marca onde os jogadores aparecem no mundo (sem marca, o gerador escolhe a terra firme mais perto do centro).

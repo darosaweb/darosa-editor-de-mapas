@@ -3,6 +3,7 @@ import { BIOMES, BIOME_INDEX, VILA_NOMES, tipoDeVila } from './biomes.js';
 import { WorldMap } from './map.js';
 import { MapView } from './render2d.js';
 import { View3D } from './view3d.js';
+import { abrirImportar } from './importar.js';
 import {
   saveToFile, downloadBlob, novoId, pedirArmazenamentoPersistente, listarMapas, guardarMapa, abrirMapa,
   renomearMapa, excluirMapa, guardarVersao, listarVersoes, abrirVersao, baixarBackup, importarArquivo,
@@ -414,6 +415,10 @@ async function criarMapaGuardado(m, nome) {
 
 // ---------- botões do topo ----------
 $('btnNovo').onclick = () => $('dlgNovo').showModal();
+$('btnImportar').onclick = () => abrirImportar(async (m, nome) => {
+  await criarMapaGuardado(m, nome);
+  avisar('📷 Desenho importado! Agora é só ajustar com os pincéis e marcar 🏠 🏘️ 🕳️');
+}, avisar);
 $('dlgNovo').addEventListener('close', async () => {
   if ($('dlgNovo').returnValue !== 'ok') return;
   const f = new FormData($('dlgNovo').querySelector('form'));
