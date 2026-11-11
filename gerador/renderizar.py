@@ -37,6 +37,12 @@ def color_of(name):
     if n in CORES:
         return CORES[n]
     if 'cherry_leaves' in n: return (240, 170, 205)
+    if n == 'orange_poplar_leaves': return (226, 128, 40)     # floresta salpicada (outono)
+    if n == 'red_poplar_leaves': return (196, 58, 40)
+    if n == 'yellow_poplar_leaves': return (232, 196, 60)
+    if n == 'leaf_litter': return (176, 110, 50)
+    if n == 'mangrove_leaves': return (84, 130, 40)
+    if n in ('mud', 'mangrove_roots', 'muddy_mangrove_roots'): return (70, 62, 58)
     if 'leaves' in n:
         return {'spruce': (60, 98, 60), 'birch': (128, 167, 85), 'jungle': (48, 160, 40),
                 'acacia': (100, 140, 40), 'dark_oak': (40, 100, 30)}.get(n.split('_leaves')[0], (60, 130, 40))
