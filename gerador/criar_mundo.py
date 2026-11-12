@@ -36,7 +36,8 @@ def main():
         print(__doc__)
         sys.exit(1)
     projeto = os.path.abspath(sys.argv[1])
-    extra = sys.argv[2:]                       # ex.: --sem-cavernas, --anel 10
+    mundo_novo = '--mundo-novo' in sys.argv[2:]   # mundo inteiro novo: também Nether e End gerados aqui
+    extra = [a for a in sys.argv[2:] if a != '--mundo-novo']   # ex.: --sem-cavernas, --anel 10
     nome = os.path.splitext(os.path.basename(projeto))[0]
     saida = os.path.join(RAIZ, 'saida', nome)
     pronto = os.path.join(saida, 'mundo-pronto')
@@ -45,7 +46,7 @@ def main():
     print(f'== 1/4 gerando o terreno de "{nome}"')
     rodar('gerar.py', projeto, saida, *extra)
     print('\n== 2/4 completando no Paper de teste (árvores, minérios, luz, vilas)')
-    rodar('testar_local.py', saida)
+    rodar('testar_local.py', saida, *(['--mundo-novo'] if mundo_novo else []))
 
     print('\n== 3/4 copiando o mundo pronto')
     info = json.load(open(os.path.join(saida, 'info.json'), encoding='utf-8'))
@@ -59,6 +60,14 @@ def main():
                 shutil.copy2(src, os.path.join(pronto, sub, arq))
                 copiados += 1
     print(f'   {copiados} arquivos em {pronto}')
+    if mundo_novo:
+        # a pasta world inteira (level.dat, data, as 3 dimensões), sem dados de jogadores nem trava do servidor
+        destino = os.path.join(saida, 'mundo-novo', 'world')
+        shutil.rmtree(os.path.dirname(destino), ignore_errors=True)
+        fora = shutil.ignore_patterns('players', 'playerdata', 'stats', 'advancements', 'session.lock')
+        shutil.copytree(os.path.dirname(os.path.dirname(os.path.dirname(OVERWORLD))), destino, ignore=fora)
+        tam = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(destino) for f in fs)
+        print(f'   mundo novo completo: {destino} ({tam / 1e6:.0f} MB)')
 
     print('\n== 4/4 imagem e relatório')
     resumo = json.loads(rodar('renderizar.py', os.path.join(pronto, 'region'), os.path.join(saida, 'info.json'),
@@ -89,6 +98,9 @@ def main():
         *[f'  {sub}/{arq}' for sub in ('region', 'entities', 'poi') for arq in info['regioes']
           if os.path.exists(os.path.join(pronto, sub, arq))],
         '',
+        *([f'Nether: borda {info["nether"]["borda"]} blocos, chunks prontos {info["nether"]["prontos"]}',
+           f'End: borda {info["end"]["borda"]} blocos, chunks prontos {info["end"]["prontos"]}', '']
+          if mundo_novo and info.get('nether') else []),
         'Comandos no servidor depois de instalar:',
         f'  setworldspawn {info["spawn"][0]} {info["spawn"][1]} {info["spawn"][2]}',
         f'  worldborder center {info["borda_centro"][0]} {info["borda_centro"][1]}',
