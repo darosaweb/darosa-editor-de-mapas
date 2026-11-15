@@ -19,7 +19,10 @@ veja a prévia em 3D, e um gerador transforma o desenho num **mundo jogável** (
   Tudo roda no navegador: a foto não sai do aparelho.
 - **Pincéis de bioma** (24 biomas vanilla, incluindo Jardim pálido, Manguezal e Floresta salpicada (outono), com cores, emojis e legenda) e **balde** para pintar áreas inteiras.
 - **Pincéis de terreno**: subir, descer, montanha, rio, alisar e nivelar; tamanho e força ajustáveis.
-- **Pincel mágico**: pintar oceano/rio afunda o terreno; pintar terra sobre a água levanta o chão.
+  A **montanha** usa o dobro do tamanho do pincel e faz morros largos e suaves (picos acima de 200 com facilidade);
+  o **rio** deixa o leito sempre na mesma profundidade.
+- **Pincel mágico**: pintar oceano/rio afunda o terreno; pintar terra sobre a água levanta o chão;
+  **terras áridas** viram platôs em degraus com desfiladeiros; **pântano** e **manguezal** ficam alagadiços.
 - **🏠 Nascer aqui**: marca onde os jogadores aparecem no mundo (sem marca, o gerador escolhe a terra firme mais perto do centro).
 - **🏘️ Vila**: marca onde vão ficar as vilas (até 8, longe umas das outras, só em terra). O estilo da vila
   segue o bioma: deserto, savana, taiga, neve ou planície (os demais biomas). Clicar numa vila tira ela.
@@ -64,6 +67,14 @@ juntou as antigas etapas *noise*, *surface* e *carvers* numa só; então o gerad
 **Minecraft completa o resto** (árvores, flores, minérios, neve, luz) conforme cada bioma. As **vilas** marcadas no editor
 são construídas pelo próprio Minecraft com `/place structure`. Detalhes: [analise/ESTRUTURA.md](analise/ESTRUTURA.md).
 
+Antes de gerar, o desenho é ajustado: manchas de bioma muito pequenas somem na vizinhança, os rios ganham leito de
+profundidade constante, o fundo do mar é suavizado (sem degraus entre oceano normal, quente e congelado) e o terreno
+em volta de cada vila é nivelado. Depois que o Minecraft completa os chunks, as árvores e plantas da área de cada
+vila são retiradas, a vila é construída e **conferida bloco a bloco** (caminhos voando ou enterrados aparecem no
+relatório). Montanhas altas ficam com rocha e neve no topo (calcita só em faixas). As cavernas vêm em quatro tipos:
+túneis, túneis finos e compridos, salões grandes e ravinas. Na linha da borda do mundo é criada uma **parede
+invisível de barreira** (altura 45 a 90), para ninguém atravessar a borda de barco.
+
 - `gerador/criar_mundo.py` — **um comando só: `.mcmapa` → mundo pronto** + imagem + relatório (usa os scripts abaixo)
 - `gerador/gerar.py` — projeto `.mcmapa` → regiões `.mca` (terreno, cavernas, anel de oceano em volta do desenho)
 - `gerador/testar_local.py` — põe o mapa num Paper de teste local, completa os chunks e desliga
@@ -91,7 +102,7 @@ Em uns 2 minutos (mapa 256×256) sai em `saida/meu-mapa/`:
 - `mundo.png` e `mundo-desenho.png` — o mundo visto de cima;
 - `relatorio.txt` — spawn, borda, vilas, contagem de árvores/minérios/cavernas, arquivos e comandos para instalar.
 
-Opções: `--sem-cavernas`, `--anel N` (chunks de oceano em volta; padrão 8).
+Opções: `--mundo-novo` (pasta `world` inteira, com Nether e End gerados e com borda), `--sem-cavernas`, `--sem-parede`, `--sem-ajustes` (gera o desenho exatamente como está), `--anel N` (chunks de oceano em volta; padrão 8).
 
 ## Formato do projeto (`.mcmapa`)
 

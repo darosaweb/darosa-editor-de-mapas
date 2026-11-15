@@ -31,8 +31,15 @@ SEC_MIN, SEC_MAX = -4, 19    # 24 seções
 AIR, WATER, STONE, DEEPSLATE, BEDROCK = ('minecraft:air', 'minecraft:water', 'minecraft:stone',
                                          'minecraft:deepslate', 'minecraft:bedrock')
 CAVE_AIR, LAVA = 'minecraft:cave_air', 'minecraft:lava'
+BARRIER = 'minecraft:barrier'
 # chance de um chunk do desenho começar um sistema de cavernas, conforme a escolha "⛏️ Cavernas" do editor
-CAVE_CHANCE = {'nenhuma': 0.0, 'poucas': 0.06, 'normal': 0.14, 'muitas': 0.28}
+# (multiplica todos os tipos: túneis, túneis finos, salões grandes e ravinas)
+CAVE_CHANCE = {'nenhuma': 0.0, 'poucas': 0.12, 'normal': 0.26, 'muitas': 0.45}
+RIO_FUNDO = 3                # profundidade do leito dos rios (constante)
+MANCHA_MIN = 150             # manchas de bioma menores que isso (em colunas) somem na vizinhança
+VILA_RAIO_PLANO = 36         # terreno nivelado em volta do marcador da vila
+VILA_RAIO_SUAVE = 64         # ...e suavizado até aqui
+PAREDE_Y = (45, 90)          # parede invisível (barreira) na linha da borda do mundo
 CAVE_MIN_Y = -59             # não escava a camada de bedrock
 CAVE_TETO = 5                # blocos de rocha preservados embaixo do chão (terra)
 CAVE_TETO_AGUA = 6           # idem embaixo de água (não inunda as cavernas)
@@ -80,14 +87,139 @@ def load_project(path):
     return p, w, h, heights, biomes
 
 
+# ---------------------------------------------------------------- ajustes do desenho antes de gerar
+def _vizinhos(i, w, n):
+    x = i % w
+    if x > 0: yield i - 1
+    if x < w - 1: yield i + 1
+    if i >= w: yield i - w
+    if i < n - w: yield i + w
+
+
+def limpar_manchas(w, h, biomes, minimo=MANCHA_MIN):
+    """Manchas de bioma muito pequenas viram o bioma em volta; bordas ficam mais suaves (rios ficam como estão)."""
+    n = w * h
+    comp = [-1] * n
+    pequena = bytearray(n)
+    for s in range(n):
+        if comp[s] >= 0:
+            continue
+        b, pilha, membros = biomes[s], [s], []
+        comp[s] = s
+        while pilha:
+            i = pilha.pop()
+            membros.append(i)
+            for j in _vizinhos(i, w, n):
+                if comp[j] < 0 and biomes[j] == b:
+                    comp[j] = s
+                    pilha.append(j)
+        if len(membros) < minimo and b != 'minecraft:river':
+            for i in membros:
+                pequena[i] = 1
+    # preenche as manchas pequenas com o bioma "de verdade" mais próximo
+    novo = list(biomes)
+    fila = [i for i in range(n) if not pequena[i]]
+    ini = 0
+    while ini < len(fila):
+        i = fila[ini]; ini += 1
+        for j in _vizinhos(i, w, n):
+            if pequena[j]:
+                pequena[j] = 0
+                novo[j] = novo[i]
+                fila.append(j)
+    # bordas: um bioma que ocupa 6 ou mais das 9 casas em volta toma a casa (menos rios)
+    final = list(novo)
+    for z in range(1, h - 1):
+        for x in range(1, w - 1):
+            i = z * w + x
+            if novo[i] == 'minecraft:river':
+                continue
+            cont = {}
+            for dz in (-w, 0, w):
+                for dx in (-1, 0, 1):
+                    b = novo[i + dz + dx]
+                    cont[b] = cont.get(b, 0) + 1
+            b, c = max(cont.items(), key=lambda kv: kv[1])
+            if c >= 6 and b != novo[i] and b != 'minecraft:river':
+                final[i] = b
+    return final
+
+
+def _media_janela(vals, w, h, r, horizontal):
+    out = list(vals)
+    linhas, tam = (h, w) if horizontal else (w, h)
+    for a in range(linhas):
+        idx = [a * w + k for k in range(tam)] if horizontal else [k * w + a for k in range(tam)]
+        acc = [0.0]
+        for i in idx:
+            acc.append(acc[-1] + vals[i])
+        for k, i in enumerate(idx):
+            lo, hi = max(0, k - r), min(tam, k + r + 1)
+            out[i] = (acc[hi] - acc[lo]) / (hi - lo)
+    return out
+
+
+def suavizar_agua(w, h, heights, biomes, sea):
+    """Rios com leito de profundidade constante; fundo do mar sem buracos e degraus entre os tipos de oceano."""
+    hs = [float(v) for v in heights]
+    rio = [b == 'minecraft:river' for b in biomes]
+    for i, v in enumerate(hs):
+        if rio[i] and v > sea - 10:          # rio (menos onde ele já desemboca em mar fundo)
+            hs[i] = sea - RIO_FUNDO
+    mar = [(not rio[i]) and (biomes[i] in AQUATIC or hs[i] < sea - 1) for i in range(len(hs))]
+    suave = hs
+    for _ in range(2):
+        suave = _media_janela(_media_janela(suave, w, h, 3, True), w, h, 3, False)
+    for i in range(len(hs)):
+        if mar[i]:
+            hs[i] = min(sea - 2, suave[i])
+    return [round(v) for v in hs]
+
+
+def nivelar_vilas(w, h, heights, biomes, sea, vilas):
+    """Terreno plano em volta de cada vila (o Minecraft encaixa melhor as casas e caminhos)."""
+    hs = list(heights)
+    for v in vilas:
+        cx, cz = v['x'], v['z']
+        terra = [hs[z * w + x] for z in range(max(0, cz - VILA_RAIO_PLANO), min(h, cz + VILA_RAIO_PLANO + 1))
+                 for x in range(max(0, cx - VILA_RAIO_PLANO), min(w, cx + VILA_RAIO_PLANO + 1))
+                 if hs[z * w + x] >= sea and biomes[z * w + x] not in AQUATIC
+                 and math.hypot(x - cx, z - cz) <= VILA_RAIO_PLANO]
+        if not terra:
+            continue
+        alvo = max(sea + 1, sorted(terra)[len(terra) // 2])
+        R = VILA_RAIO_SUAVE
+        for z in range(max(0, cz - R), min(h, cz + R + 1)):
+            for x in range(max(0, cx - R), min(w, cx + R + 1)):
+                i = z * w + x
+                if hs[i] < sea or biomes[i] in AQUATIC:
+                    continue
+                d = math.hypot(x - cx, z - cz)
+                if d > R:
+                    continue
+                t = 0.0 if d <= VILA_RAIO_PLANO else (d - VILA_RAIO_PLANO) / (R - VILA_RAIO_PLANO)
+                t = t * t * (3 - 2 * t)
+                hs[i] = round(alvo + (hs[i] - alvo) * t)
+    return hs
+
+
 class World:
     """Altura e bioma de qualquer coluna do mundo, inclusive fora do desenho (oceano)."""
 
-    def __init__(self, w, h, sea, heights, biomes):
+    def __init__(self, w, h, sea, heights, biomes, parede=None):
         self.w, self.h, self.sea = w, h, sea
         self.heights, self.biomes = heights, biomes
         self.ox, self.oz = -w // 2, -h // 2     # coordenada do mundo do pixel (0,0)
         self.floor = sea - OCEAN_DEPTH
+        # parede invisível: (x_min, x_max, z_min, z_max, y_min, y_max) em coordenadas do mundo
+        self.parede = parede
+
+    def na_parede(self, wx, wz):
+        p = self.parede
+        if not p:
+            return False
+        x0, x1, z0, z1 = p[:4]
+        return ((wx == x0 or wx == x1) and z0 <= wz <= z1) or ((wz == z0 or wz == z1) and x0 <= wx <= x1)
 
     def column(self, wx, wz):
         x, z = wx - self.ox, wz - self.oz
@@ -133,25 +265,34 @@ def surface_layers(biome, top, sea, slope, wx, wz):
     elif biome == 'minecraft:mangrove_swamp':     # manguezal: chão de lama, como no Minecraft normal
         mat = ['minecraft:mud'] * 3 + ['minecraft:dirt']
     elif biome == 'minecraft:stony_peaks':
-        mat = ['minecraft:stone'] if rnd(wx, top, wz, 3) < 0.8 else ['minecraft:calcite']
+        mat = ['minecraft:stone'] * 3
     elif biome in AQUATIC:   # oceano/rio pintado mas acima da água: praia
         mat = ['minecraft:sand'] * 3 + ['minecraft:sandstone']
     else:
         mat = ['minecraft:grass_block'] + ['minecraft:dirt'] * 3
 
+    quente = biome in ('minecraft:desert', 'minecraft:badlands', 'minecraft:savanna', 'minecraft:jungle')
     # encostas íngremes viram pedra (como no Minecraft normal)
     if slope >= 4 and biome not in ('minecraft:desert', 'minecraft:badlands', 'minecraft:beach'):
         mat = ['minecraft:stone'] if slope >= 7 else ['minecraft:gravel' if rnd(wx, 2, wz, 4) < 0.3 else 'minecraft:stone']
-    # topos muito altos com neve
-    if top >= 175 and biome not in ('minecraft:desert', 'minecraft:badlands', 'minecraft:savanna', 'minecraft:jungle'):
-        mat = ['minecraft:snow_block'] * 2
-    return [(top - i, b) for i, b in enumerate(mat)]
+    # montanha alta: rocha acima de ~145 (com variação), neve acima de ~170
+    linha_pedra = 145 + rnd(wx, 3, wz, 9) * 12
+    linha_neve = 168 + rnd(wx, 4, wz, 10) * 10
+    if top >= linha_pedra and not quente and biome != 'minecraft:badlands':
+        mat = ['minecraft:stone'] * 3
+    if top >= linha_neve and not quente:
+        mat = ['minecraft:snow_block'] * 2 + ['minecraft:stone']
+    camadas = [(top - i, b) for i, b in enumerate(mat)]
+    # calcita só em faixas finas na rocha das montanhas (nunca cobrindo o pico)
+    if mat[0] == 'minecraft:stone' and top >= 110:
+        camadas = [(y, 'minecraft:calcite' if y % 13 in (0, 1) and y < top - 1 else b) for y, b in camadas]
+    return camadas
 
 
 # ---------------------------------------------------------------- chunk
-def _worm(rng, spheres, x, y, z, comp, base_r):
-    """Um túnel sinuoso a partir de (x, y, z)."""
-    yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-0.35, 0.35)
+def _worm(rng, spheres, x, y, z, comp, base_r, vs=1.0, inclinacao=0.35):
+    """Um túnel sinuoso a partir de (x, y, z). vs > 1 deixa o túnel alto e estreito (ravina)."""
+    yaw, pitch = rng.uniform(0, 2 * math.pi), rng.uniform(-inclinacao, inclinacao)
     dyaw = 0.0
     for i in range(comp):
         x += math.cos(yaw) * math.cos(pitch)
@@ -159,12 +300,12 @@ def _worm(rng, spheres, x, y, z, comp, base_r):
         y += math.sin(pitch)
         dyaw = dyaw * 0.75 + rng.uniform(-1, 1) * 0.18
         yaw += dyaw
-        pitch = pitch * 0.9 + rng.uniform(-1, 1) * 0.09
+        pitch = pitch * 0.9 + rng.uniform(-1, 1) * 0.09 * (inclinacao / 0.35)
         if y < CAVE_MIN_Y + 2:
             pitch = abs(pitch)
         r = base_r * (0.75 + 0.5 * math.sin(math.pi * i / comp))
         if i % max(1, int(r / 1.5)) == 0:
-            spheres.append((x, y, z, r, 1.0, False))
+            spheres.append((x, y, z, r, vs, False))
 
 
 def plan_caves(world, cx0, cz0, cx1, cz1, seed, chance=0.14, entradas=()):
@@ -176,7 +317,8 @@ def plan_caves(world, cx0, cz0, cx1, cz1, seed, chance=0.14, entradas=()):
         for cx in range(cx0, cx1 + 1):
             # semente estável por chunk (o mesmo mapa gera sempre as mesmas cavernas)
             rng = random.Random(((seed * 73856093) ^ (cx * 19349663) ^ (cz * 83492791) ^ 0x5EED) & 0xFFFFFFFF)
-            if rng.random() >= chance:
+            sorteio = rng.random()
+            if sorteio >= chance:
                 continue
             x, z = cx * 16 + rng.random() * 16, cz * 16 + rng.random() * 16
             top, _ = world.column(int(x), int(z))
@@ -184,10 +326,29 @@ def plan_caves(world, cx0, cz0, cx1, cz1, seed, chance=0.14, entradas=()):
             if y_max < -48:
                 continue
             y = rng.uniform(-50, y_max)
-            if rng.random() < 0.25:   # sala grande no começo
-                spheres.append((x, y, z, rng.uniform(5, 9), 0.55, False))
-            for _ in range(rng.randint(1, 3)):
-                _worm(rng, spheres, x, y, z, rng.randint(50, 140), rng.uniform(1.6, 3.2))
+            tipo = sorteio / chance            # 0..1: escolhe o tipo de caverna
+            if tipo < 0.10:
+                # salão grande ("queijo"): várias bolhas achatadas juntas, com colunas de pedra no meio
+                y = rng.uniform(-45, min(15, y_max))
+                for _ in range(rng.randint(4, 8)):
+                    spheres.append((x + rng.uniform(-12, 12), y + rng.uniform(-4, 4), z + rng.uniform(-12, 12),
+                                    rng.uniform(6, 11), 0.55, False))
+                for _ in range(2):
+                    _worm(rng, spheres, x, y, z, rng.randint(60, 120), rng.uniform(1.8, 2.8))
+            elif tipo < 0.16:
+                # ravina: fenda alta e estreita, quase reta
+                y = rng.uniform(-20, max(-19, top - 30))
+                _worm(rng, spheres, x, y, z, rng.randint(60, 130), rng.uniform(1.5, 2.3), vs=3.5, inclinacao=0.08)
+            elif tipo < 0.45:
+                # túneis finos e compridos ("espaguete")
+                for _ in range(rng.randint(1, 2)):
+                    _worm(rng, spheres, x, y, z, rng.randint(150, 260), rng.uniform(1.1, 1.6))
+            else:
+                # túneis comuns, às vezes com uma sala no começo
+                if rng.random() < 0.25:
+                    spheres.append((x, y, z, rng.uniform(5, 9), 0.55, False))
+                for _ in range(rng.randint(1, 3)):
+                    _worm(rng, spheres, x, y, z, rng.randint(50, 140), rng.uniform(1.6, 3.2))
 
     # bocas de caverna: rampa larga que começa no chão e desce até os túneis
     for ex, ez in entradas:
@@ -288,7 +449,17 @@ def build_chunk(world, cx, cz, caves=None):
                     y -= 1
                 new_tops[ci] = y
 
+    # parede invisível de barreira na linha da borda do mundo
+    parede = [world.na_parede(c[2], c[3]) for c in cols]
+    tem_parede = any(parede)
+    py0, py1 = (world.parede[4], world.parede[5]) if tem_parede else (0, -1)
+    if tem_parede:
+        for y in range(py0, py1 + 1):
+            carved_secs.add(y >> 4)
+
     def block(c, y, ci=None):
+        if tem_parede and ci is not None and parede[ci] and py0 <= y <= py1:
+            return BARRIER
         if carved and ci is not None and (y - MIN_Y) * 256 + ci in carved:
             return LAVA if y <= LAVA_Y else CAVE_AIR
         top, surf, wx, wz = c
@@ -360,6 +531,10 @@ def build_chunk(world, cx, cz, caves=None):
     # coluna com água: a água conta para WORLD_SURFACE; coluna de terra: o topo real (já com a boca de caverna)
     surface = [(max(t, sea - 1) if t < sea - 1 else nt) + 1 - MIN_Y for t, nt in zip(tops, new_tops)]
     floor = [nt + 1 - MIN_Y for nt in new_tops]                # só sólidos
+    if tem_parede:   # a barreira é sólida: conta como topo da coluna
+        topo_parede = py1 + 1 - MIN_Y
+        surface = [max(s, topo_parede) if parede[ci] else s for ci, s in enumerate(surface)]
+        floor = [max(f, topo_parede) if parede[ci] else f for ci, f in enumerate(floor)]
     hm = lambda vals: LongArray(pack(vals, 9))  # noqa: E731
     heightmaps = {
         'MOTION_BLOCKING': hm(surface), 'MOTION_BLOCKING_NO_LEAVES': hm(surface),
@@ -422,13 +597,25 @@ def main():
     ap.add_argument('saida')
     ap.add_argument('--anel', type=int, default=8, help='chunks de oceano em volta do desenho (padrão 8)')
     ap.add_argument('--sem-cavernas', action='store_true', help='não escava cavernas')
+    ap.add_argument('--sem-parede', action='store_true', help='não cria a parede de barreira na borda do mundo')
+    ap.add_argument('--sem-ajustes', action='store_true',
+                    help='não limpa manchas de bioma, não acerta rios/mar e não nivela as vilas')
     a = ap.parse_args()
 
     p, w, h, heights, biomes = load_project(a.projeto)
     if w % 16 or h % 16:
         raise SystemExit('largura e altura do mapa precisam ser múltiplos de 16')
+    if not a.sem_ajustes:
+        t_aj = time.time()
+        biomes = limpar_manchas(w, h, biomes)
+        heights = suavizar_agua(w, h, heights, biomes, p['nivelMar'])
+        heights = nivelar_vilas(w, h, heights, biomes, p['nivelMar'], (p.get('marcadores') or {}).get('vilas') or [])
+        print(f'  ajustes: manchas de bioma, rios, mar e terreno das vilas ({time.time() - t_aj:.1f}s)')
+    borda = max(w, h) + 32
+    # borda do mundo centrada em 0.0: dentro dela ficam as colunas -borda/2 .. borda/2 - 1
+    parede = None if a.sem_parede else (-borda // 2, borda // 2 - 1, -borda // 2, borda // 2 - 1, *PAREDE_Y)
     sea = p['nivelMar']
-    world = World(w, h, sea, heights, biomes)
+    world = World(w, h, sea, heights, biomes, parede)
     c0x, c0z = world.ox // 16 - a.anel, world.oz // 16 - a.anel
     c1x, c1z = (world.ox + w) // 16 + a.anel - 1, (world.oz + h) // 16 + a.anel - 1
 
@@ -486,7 +673,9 @@ def main():
         'desenho_x': [world.ox, world.ox + w - 1], 'desenho_z': [world.oz, world.oz + h - 1],
         'chunks_x': [c0x, c1x], 'chunks_z': [c0z, c1z],
         # borda do mundo: o desenho + 16 blocos de mar, centrada no 0,0
-        'borda_centro': [0, 0], 'borda_tamanho': max(w, h) + 32,
+        'borda_centro': [0, 0], 'borda_tamanho': borda,
+        'parede': None if not parede else {'x': [parede[0], parede[1]], 'z': [parede[2], parede[3]],
+                                           'y': [parede[4], parede[5]], 'bloco': BARRIER},
         'spawn': spawn,
         'spawn_origem': spawn_origem,
         'vilas': vilas,

@@ -2,7 +2,7 @@
 // 1) foto  2) ajustar os 4 cantos da folha  3) cada cor vira um bioma  4) relevo automático.
 // Tudo roda no navegador; a foto não sai do aparelho.
 import { BIOMES, BIOME_INDEX } from './biomes.js';
-import { WorldMap, fbm } from './map.js';
+import { WorldMap, fbm, planaltoBadlands } from './map.js';
 
 const IGNORAR = -1;      // contornos, letras, sombras: viram o bioma vizinho
 const MONTANHA = -2;     // vira montanha (o bioma é o que estiver em volta)
@@ -55,6 +55,7 @@ function sugerir([r, g, b]) {
     if (l > 0.6) return B('jungle');
     return B('taiga');                                              // verde-escuro
   }
+  if (h >= 40 && h < 80 && l < 0.45) return B('swamp');                          // verde-oliva escuro = pântano
   if (h >= 40 && h < 70) return s > 0.7 ? B('desert') : B('savanna');            // amarelos
   if (h >= 18 && h < 40) return s > 0.6 ? B('dappled_forest') : B('dark_forest'); // laranja (outono) / marrom
   if (h >= 260 || h < 18) {
@@ -238,6 +239,65 @@ function bfs(W, H, semente, limite = 1e9) {
   return { dist, dono };
 }
 
+// desfoque em caixa de um campo (Float32, W*H), separável
+function borrar(v, W, H, r) {
+  const tmp = new Float32Array(v.length);
+  for (let y = 0; y < H; y++) {
+    let acc = 0, cnt = 0;
+    for (let x = 0; x < Math.min(r, W); x++) { acc += v[y * W + x]; cnt++; }
+    for (let x = 0; x < W; x++) {
+      if (x + r < W) { acc += v[y * W + x + r]; cnt++; }
+      if (x - r - 1 >= 0) { acc -= v[y * W + x - r - 1]; cnt--; }
+      tmp[y * W + x] = acc / cnt;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let acc = 0, cnt = 0;
+    for (let y = 0; y < Math.min(r, H); y++) { acc += tmp[y * W + x]; cnt++; }
+    for (let y = 0; y < H; y++) {
+      if (y + r < H) { acc += tmp[(y + r) * W + x]; cnt++; }
+      if (y - r - 1 >= 0) { acc -= tmp[(y - r - 1) * W + x]; cnt--; }
+      v[y * W + x] = acc / cnt;
+    }
+  }
+}
+
+// Manchas de bioma pequenas viram o bioma em volta; depois, bordas mais lisas (rios ficam como estão)
+function limparManchas(bio, W, H, minimo) {
+  const n = W * H, rio = B('river');
+  const comp = new Int32Array(n).fill(-1), pequena = new Uint8Array(n);
+  const pilha = new Int32Array(n), membros = new Int32Array(n);
+  for (let s = 0; s < n; s++) {
+    if (comp[s] >= 0) continue;
+    const b = bio[s];
+    let top = 0, qtd = 0;
+    pilha[top++] = s; comp[s] = s;
+    while (top) {
+      const i = pilha[--top]; membros[qtd++] = i;
+      const x = i % W;
+      const viz = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i >= W ? i - W : -1, i < n - W ? i + W : -1];
+      for (const j of viz) if (j >= 0 && comp[j] < 0 && bio[j] === b) { comp[j] = s; pilha[top++] = j; }
+    }
+    if (qtd < minimo && b !== rio) for (let k = 0; k < qtd; k++) pequena[membros[k]] = 1;
+  }
+  const { dono } = bfs(W, H, i => !pequena[i]);
+  for (let i = 0; i < n; i++) if (pequena[i] && dono[i] >= 0) bio[i] = bio[dono[i]];
+  // bordas: um bioma com 6+ das 9 casas em volta toma a casa
+  const src = Uint8Array.from(bio), cnt = new Uint8Array(256);
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x;
+    if (src[i] === rio) continue;
+    let best = src[i], bc = 0;
+    const vistos = [];
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const b = src[i + dy * W + dx]; vistos.push(b);
+      if (++cnt[b] > bc) { bc = cnt[b]; best = b; }
+    }
+    for (const b of vistos) cnt[b] = 0;
+    if (bc >= 6 && best !== rio) bio[i] = best;
+  }
+}
+
 // ---------------------------------------------------------------- montar o mapa
 function montarMapa(st, opcoes) {
   const { W, H, labels } = st;
@@ -274,6 +334,7 @@ function montarMapa(st, opcoes) {
   const bio = new Uint8Array(n);
   const padrao = B('plains');
   for (let i = 0; i < n; i++) bio[i] = cls[i] >= 0 ? cls[i] : (dono[i] >= 0 ? cls[dono[i]] : padrao);
+  limparManchas(bio, W, H, Math.max(60, Math.round(n * 0.0002)));
 
   const agua = i => BIOMES[bio[i]].agua;
   const isOceano = i => agua(i) && bio[i] !== B('river');
@@ -286,40 +347,51 @@ function montarMapa(st, opcoes) {
     const semPraia = new Set(['minecraft:desert', 'minecraft:badlands', 'minecraft:snowy_plains', 'minecraft:snowy_taiga',
       'minecraft:stony_peaks', 'minecraft:mushroom_fields', 'minecraft:swamp', 'minecraft:mangrove_swamp']);
     for (let i = 0; i < n; i++) if (!agua(i) && !montanha[i] && dOceano[i] <= 3 && !semPraia.has(BIOMES[bio[i]].id)) bio[i] = B('beach');
+    limparManchas(bio, W, H, Math.max(60, Math.round(n * 0.0002)));   // tira pedacinhos que a faixa de praia criou
   }
 
   const m = new WorldMap(W, H, sea);
   const seed = m.seed;
-  const dentro = bfs(W, H, i => !montanha[i], 200).dist;   // quão "para dentro" da montanha
+  // montanhas: a área cinza é alargada e "borrada" para virar um morro largo e suave (0..1), com pico alto
+  const alarga = Math.max(2, Math.round(W / 80));
+  // (o bfs marca "limite" em quem ficou longe; por isso o limite é alarga + 1)
+  const perto = bfs(W, H, i => montanha[i], alarga + 1).dist;
+  const campo = new Float32Array(n);
+  for (let i = 0; i < n; i++) campo[i] = perto[i] <= alarga ? 1 : 0;
+  const rb = Math.max(3, Math.round(W / 40));
+  borrar(campo, W, H, rb); borrar(campo, W, H, rb);
+  const badlands = B('badlands'), rio = B('river');
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x;
     let h;
-    if (agua(i)) {
-      const prof = BIOMES[bio[i]].profundidade || 10;
-      h = sea - Math.min(prof, 1 + dTerra[i] * 0.7);
-    } else if (BIOMES[bio[i]].rente && !montanha[i]) {
+    if (bio[i] === rio) {
+      h = sea - (dTerra[i] <= 1 ? 2 : 3);                    // leito do rio sempre igual
+    } else if (agua(i)) {
+      h = sea - Math.min(14, 1 + dTerra[i] * 0.6);           // mar: mesma rampa para os 3 tipos de oceano
+    } else if (BIOMES[bio[i]].rente && campo[i] < 0.05) {
       // pântano / manguezal: no nível da água, com poças
       h = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
+    } else if (bio[i] === badlands && campo[i] < 0.05) {
+      h = sea + 1 + Math.min(planaltoBadlands(x, y, seed), dAgua[i] * 2.5);   // platôs e desfiladeiros
     } else {
       const d = Math.min(dAgua[i], 24);
       h = sea + 1 + d * 0.45 + (fbm(x / 40, y / 40, seed, 4) - 0.5) * 10 * Math.min(1, d / 8);
-      if (montanha[i]) {
-        const ridge = 1 - Math.abs(fbm(x / 22, y / 22, seed + 31, 4) * 2 - 1);
-        h += 10 + Math.min(dentro[i], 60) * 2.2 * (0.55 + ridge * 0.9);
-      }
+      if (campo[i] > 0) h += 150 * Math.pow(campo[i], 1.3) * (0.85 + 0.3 * fbm(x / 35, y / 35, seed + 31, 3));
     }
-    m.height[i] = Math.min(240, h);
+    m.height[i] = Math.min(260, h);
     m.biome[i] = bio[i];
   }
-  // suaviza o relevo sem deixar terra afundar nem água subir
-  for (let pass = 0; pass < 2; pass++) {
+  // suaviza o relevo sem deixar terra afundar nem água subir (os degraus das terras áridas ficam como estão)
+  for (let pass = 0; pass < 3; pass++) {
     const src = Float32Array.from(m.height);
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
       const i = y * W + x;
+      if (bio[i] === badlands || (pass >= 2 && !agua(i))) continue;   // 3ª passada só no mar
       let s = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += src[i + dy * W + dx];
       let v = s / 9;
-      if (agua(i)) v = Math.min(v, sea - 1);
+      if (bio[i] === rio) v = src[i];
+      else if (agua(i)) v = Math.min(v, sea - 2);
       else if (!BIOMES[bio[i]].rente) v = Math.max(v, sea);
       m.height[i] = v;
     }

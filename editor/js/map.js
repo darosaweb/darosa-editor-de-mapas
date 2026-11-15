@@ -28,6 +28,17 @@ export function fbm(x, y, seed, oct = 4) {
   return s / tot; // 0..1
 }
 
+// Relevo das terras áridas (badlands): platôs em degraus de 7 blocos e desfiladeiros sinuosos.
+// Devolve a altura acima do nível do mar.
+export function planaltoBadlands(x, y, seed) {
+  let alto = 10 + fbm(x / 70, y / 70, seed + 51, 3) * 60;          // 10 a ~70 acima do mar
+  const vale = Math.abs(fbm(x / 55, y / 55, seed + 52, 3) * 2 - 1); // perto de 0 = fundo do desfiladeiro
+  if (vale < 0.14) alto = 4 + (alto - 4) * Math.pow(vale / 0.14, 1.5);
+  const degrau = 7, base = Math.floor(alto / degrau) * degrau, resto = (alto - base) / degrau;
+  const t = resto < 0.8 ? 0 : (resto - 0.8) / 0.2;                  // parede curta entre um platô e outro
+  return base + degrau * t * t * (3 - 2 * t);
+}
+
 const clampY = v => (v < MIN_Y ? MIN_Y : v > MAX_Y ? MAX_Y : v);
 
 export class WorldMap {
@@ -179,7 +190,8 @@ export class WorldMap {
   // tool: 'bioma' | 'subir' | 'descer' | 'suavizar' | 'nivelar' | 'montanha' | 'rio'
   // o: { raio, forca (0..1), bioma, magico, alvo }
   applyBrush(tool, cx, cy, o) {
-    const r = Math.max(0.5, o.raio);
+    // montanhas são grandes: o pincel de montanha usa o dobro do tamanho escolhido
+    const r = Math.max(0.5, tool === 'montanha' ? o.raio * 2 : o.raio);
     const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(this.w - 1, Math.ceil(cx + r));
     const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(this.h - 1, Math.ceil(cy + r));
     if (x0 > x1 || y0 > y1) return;
@@ -212,9 +224,17 @@ export class WorldMap {
           const edge = 0.82 + 0.36 * fbm(x / 6, y / 6, seed + 5, 2);
           if (d <= edge || r < 3) B[i] = o.bioma;
           if (o.magico && bio) {
-            if (bio.agua) {
+            if (bio.id === 'minecraft:river') {
+              // rio: leito na mesma profundidade em todo lugar (rebaixa e também enche buracos, fora do mar fundo)
+              const alvo = sea - bio.profundidade;
+              if (H[i] > alvo || H[i] > sea - 8) H[i] += (alvo - H[i]) * Math.min(1, fall * 0.8);
+            } else if (bio.agua) {
               const alvo = sea - bio.profundidade;
               if (H[i] > alvo) H[i] += (alvo - H[i]) * fall * 0.35;
+            } else if (bio.id === 'minecraft:badlands') {
+              // terras áridas: platôs em degraus e desfiladeiros
+              const alvo = sea + planaltoBadlands(x, y, seed);
+              H[i] += (alvo - H[i]) * fall * 0.35;
             } else if (bio.rente) {
               // alagadiço: o chão fica em volta do nível da água, com poças
               const alvo = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
@@ -236,16 +256,18 @@ export class WorldMap {
           break;
         }
         case 'montanha': {
-          const ridge = 1 - Math.abs(fbm(x / 18, y / 18, seed + 31, 4) * 2 - 1);
-          const prof = Math.pow(1 - d, 1.6);
-          H[i] = clampY(H[i] + f * 5 * prof * (0.5 + ridge));
+          // domo largo e suave (em vez de ponta), com um pouco de relevo de cristas por cima
+          const crista = fbm(x / 40, y / 40, seed + 31, 3);
+          const prof = fall * (0.8 + 0.4 * crista);
+          H[i] = clampY(H[i] + f * 9 * prof);
           break;
         }
         case 'rio': {
           const leito = sea - 3;
           const core = 0.5 + 0.15 * fbm(x / 5, y / 5, seed + 11, 2);
           if (d < core) {
-            H[i] += (Math.min(H[i], leito) - H[i]) * Math.min(1, 0.5 + f);
+            // leito sempre na mesma profundidade: rebaixa o alto e enche os buracos (menos no mar fundo)
+            if (H[i] > leito || H[i] > sea - 8) H[i] += (leito - H[i]) * Math.min(1, 0.5 + f);
             B[i] = RIVER;
           } else {
             // margens: desce suavemente até perto da água

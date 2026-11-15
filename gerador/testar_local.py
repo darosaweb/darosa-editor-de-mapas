@@ -17,6 +17,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from anvil import Region  # noqa: E402
+from chunkfmt import section_blocks  # noqa: E402
 from rcon import wait_rcon  # noqa: E402
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,6 +56,85 @@ def statuses(info, pasta=OVERWORLD):
     return c
 
 
+# ---------------------------------------------------------------- vilas
+VEGETACAO = ['#minecraft:leaves', '#minecraft:logs', '#minecraft:flowers', '#minecraft:saplings',
+             'minecraft:short_grass', 'minecraft:tall_grass', 'minecraft:fern', 'minecraft:large_fern',
+             'minecraft:bush', 'minecraft:firefly_bush', 'minecraft:dead_bush', 'minecraft:sweet_berry_bush',
+             'minecraft:brown_mushroom_block', 'minecraft:red_mushroom_block', 'minecraft:mushroom_stem',
+             'minecraft:vine', 'minecraft:bamboo', 'minecraft:cactus', 'minecraft:leaf_litter',
+             'minecraft:moss_carpet', 'minecraft:pale_moss_carpet', 'minecraft:pale_hanging_moss',
+             'minecraft:mangrove_roots', 'minecraft:bee_nest', 'minecraft:snow']
+VILA_LIMPAR = 64          # raio (blocos) da área limpa em volta da vila
+VILA_ALTURA = 44          # do chão até onde limpar
+
+
+def limpar_area_vila(r, v):
+    """Tira árvores e plantas em volta do marcador (em caixas de 32x32x32, o limite do comando /fill)."""
+    y0 = v['y'] - 3
+    y1 = v['y'] + VILA_ALTURA
+    n = 0
+    for bx in range(v['x'] - VILA_LIMPAR, v['x'] + VILA_LIMPAR, 32):
+        for bz in range(v['z'] - VILA_LIMPAR, v['z'] + VILA_LIMPAR, 32):
+            for by in range(y0, y1 + 1, 32):
+                caixa = f'{bx} {by} {bz} {bx + 31} {min(by + 31, y1)} {bz + 31}'
+                for alvo in VEGETACAO:
+                    resp = r.cmd(f'fill {caixa} air replace {alvo}')
+                    if resp.startswith('Successfully'):
+                        n += int(''.join(ch for ch in resp.split('filled')[-1] if ch.isdigit()) or 0)
+    return n
+
+
+class LeitorBlocos:
+    """Lê blocos do mundo salvo (para conferir as vilas depois de construídas)."""
+
+    def __init__(self, pasta):
+        self.pasta, self.cache = pasta, {}
+
+    def chunk(self, cx, cz):
+        k = (cx, cz)
+        if k not in self.cache:
+            secoes = {}
+            path = os.path.join(self.pasta, 'region', f'r.{cx >> 5}.{cz >> 5}.mca')
+            if os.path.exists(path):
+                ch = Region(path).chunk(cx & 31, cz & 31)
+                for s in (ch or {}).get('sections', []):
+                    b = section_blocks(s)
+                    if b:
+                        secoes[s['Y']] = b
+            self.cache[k] = secoes
+        return self.cache[k]
+
+    def bloco(self, x, y, z):
+        b = self.chunk(x >> 4, z >> 4).get(y >> 4)
+        return b[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] if b else 'minecraft:air'
+
+
+VAZIO = {'minecraft:air', 'minecraft:cave_air', 'minecraft:water'}
+NAO_ENTERRA = VAZIO | {'minecraft:short_grass', 'minecraft:tall_grass', 'minecraft:snow', 'minecraft:fern'}
+
+
+def conferir_vila(leitor, v, raio=80):
+    """Conta caminhos da vila voando (sem chão embaixo / em cima de árvore) ou enterrados (com bloco em cima)."""
+    caminhos = voando = enterrados = sinos = 0
+    for x in range(v['x'] - raio, v['x'] + raio + 1):
+        for z in range(v['z'] - raio, v['z'] + raio + 1):
+            for y in range(v['y'] - 25, v['y'] + 30):
+                b = leitor.bloco(x, y, z)
+                if b == 'minecraft:bell':
+                    sinos += 1
+                if b != 'minecraft:dirt_path':
+                    continue
+                caminhos += 1
+                baixo, cima = leitor.bloco(x, y - 1, z), leitor.bloco(x, y + 1, z)
+                if baixo in VAZIO or 'leaves' in baixo or baixo.endswith('_log'):
+                    voando += 1
+                elif cima not in NAO_ENTERRA:
+                    enterrados += 1
+    ruins = voando + enterrados
+    ok = caminhos > 0 and ruins <= 0.1 * caminhos
+    return {'ok': ok, 'caminhos': caminhos, 'voando': voando, 'enterrados': enterrados, 'sinos': sinos}
+
+
 def forcar_carregar(r, dim, x0, x1, z0, z1):
     """forceload em blocos de até 16x16 chunks (limite do comando)."""
     pre = '' if dim == 'overworld' else f'execute in minecraft:{dim} run '
@@ -82,7 +162,7 @@ def pregerar(r, dim, borda, margem=6):
     raio = math.ceil(borda / 2 / 16) + margem
     info_dim = {'chunks_x': [-raio, raio - 1], 'chunks_z': [-raio, raio - 1], 'borda': borda}
     pre = f'execute in minecraft:{dim} run '
-    r.cmd(pre + 'worldborder center 0 0')
+    r.cmd(pre + 'worldborder center 0.0 0.0')
     r.cmd(pre + f'worldborder set {borda}')
     print('   ', dim, '->', r.cmd(pre + 'worldborder get').strip())
     forcar_carregar(r, dim, -raio, raio - 1, -raio, raio - 1)
@@ -114,7 +194,7 @@ def main(saida, mundo_novo=False):
     time.sleep(3)
     sx, sy, sz = info['spawn']
     print('   ', r.cmd(f'setworldspawn {sx} {sy} {sz}'))
-    print('   ', r.cmd(f'worldborder center {info["borda_centro"][0]} {info["borda_centro"][1]}'))
+    print('   ', r.cmd(f'worldborder center {info["borda_centro"][0]}.0 {info["borda_centro"][1]}.0'))
     print('   ', r.cmd(f'worldborder set {info["borda_tamanho"]}'))
 
     print('4/5 completando os chunks (árvores, minérios, luz)…')
@@ -125,13 +205,22 @@ def main(saida, mundo_novo=False):
     vilas = info.get('vilas') or []
     resultado_vilas = []
     for v in vilas:
+        limpos = limpar_area_vila(r, v)          # primeiro tira as árvores, senão a vila se apoia nas copas
         resp = r.cmd(f'place structure {v["estrutura"]} {v["x"]} {v["y"]} {v["z"]}')
-        ok = 'Generated' in resp or 'gerad' in resp.lower()
-        resultado_vilas.append({**v, 'ok': ok, 'resposta': resp.strip()})
-        print(f'    vila {v["estrutura"]} em X {v["x"]} Z {v["z"]}: {"✓" if ok else "✗ " + resp.strip()}')
+        colocada = 'Generated' in resp or 'gerad' in resp.lower()
+        resultado_vilas.append({**v, 'colocada': colocada, 'blocos_limpos': limpos, 'resposta': resp.strip()})
     if vilas:
         time.sleep(5)          # deixa o servidor terminar de colocar as peças das vilas
         r.cmd('save-all flush')
+        time.sleep(2)
+        leitor = LeitorBlocos(OVERWORLD)
+        for v in resultado_vilas:
+            chk = conferir_vila(leitor, v) if v['colocada'] else {'ok': False}
+            v['checagem'] = chk
+            v['ok'] = v['colocada'] and chk['ok']
+            detalhe = (f'{chk.get("caminhos", 0)} caminhos, {chk.get("voando", 0)} voando, '
+                       f'{chk.get("enterrados", 0)} enterrados, {chk.get("sinos", 0)} sino(s)') if v['colocada'] else v['resposta']
+            print(f'    vila {v["estrutura"]} em X {v["x"]} Z {v["z"]}: {"✓" if v["ok"] else "⚠"} {detalhe}')
     info['vilas_resultado'] = resultado_vilas
 
     if mundo_novo:

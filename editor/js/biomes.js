@@ -18,16 +18,18 @@ export const BIOMES = [
   { id: 'minecraft:savanna',         nome: 'Savana',            emoji: '🦒', cor: '#c2b24a', simples: true,  agua: false },
   { id: 'minecraft:jungle',          nome: 'Selva',             emoji: '🦜', cor: '#2bb24c', simples: true,  agua: false },
   // rente: fica bem no nível da água, com poças (o pincel mágico deixa o chão alagadiço)
-  { id: 'minecraft:swamp',           nome: 'Pântano',           emoji: '🐸', cor: '#5b6b3a', simples: true,  agua: false, rente: true },
-  { id: 'minecraft:mangrove_swamp',  nome: 'Manguezal',         emoji: '🌿', cor: '#3f8f6b', simples: true,  agua: false, rente: true },
+  { id: 'minecraft:swamp',           nome: 'Pântano',           emoji: '🐸', cor: '#6b7a1e', simples: true,  agua: false, rente: true,
+    dica: 'Pântano: água escura, árvores com cipós, sapos e cogumelos' },
+  { id: 'minecraft:mangrove_swamp',  nome: 'Manguezal',         emoji: '🦀', cor: '#8a5a3c', simples: true,  agua: false, rente: true,
+    dica: 'Manguezal: árvores de mangue com raízes, chão de lama e poças' },
   { id: 'minecraft:mushroom_fields', nome: 'Cogumelos',         emoji: '🍄', cor: '#b07cc6', simples: true,  agua: false },
   { id: 'minecraft:meadow',          nome: 'Prado',             emoji: '🌼', cor: '#a8dd7c', simples: false, agua: false },
   { id: 'minecraft:stony_peaks',     nome: 'Picos de pedra',    emoji: '🪨', cor: '#9a9a9a', simples: false, agua: false },
   { id: 'minecraft:beach',           nome: 'Praia',             emoji: '🏖️', cor: '#fae8a4', simples: false, agua: false },
   { id: 'minecraft:river',           nome: 'Rio',               emoji: '🏞️', cor: '#4aa3df', simples: true,  agua: true, profundidade: 3 },
   { id: 'minecraft:ocean',           nome: 'Oceano',            emoji: '🌊', cor: '#2456b8', simples: true,  agua: true, profundidade: 14 },
-  { id: 'minecraft:warm_ocean',      nome: 'Oceano quente',     emoji: '🐠', cor: '#22a6b8', simples: false, agua: true, profundidade: 10 },
-  { id: 'minecraft:frozen_ocean',    nome: 'Oceano congelado',  emoji: '🧊', cor: '#8fb0d8', simples: false, agua: true, profundidade: 12 },
+  { id: 'minecraft:warm_ocean',      nome: 'Oceano quente',     emoji: '🐠', cor: '#22a6b8', simples: false, agua: true, profundidade: 14 },
+  { id: 'minecraft:frozen_ocean',    nome: 'Oceano congelado',  emoji: '🧊', cor: '#8fb0d8', simples: false, agua: true, profundidade: 14 },
 ];
 
 // Tipo de vila do Minecraft que combina com cada bioma (as vilas vanilla existem em 5 estilos)

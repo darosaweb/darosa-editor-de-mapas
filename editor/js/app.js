@@ -85,7 +85,7 @@ function buildBiomes() {
     const b = document.createElement('button');
     b.className = 'bioma' + (bi.simples ? '' : ' avancado');
     b.dataset.i = i;
-    b.title = bi.id;
+    b.title = bi.dica || bi.nome;
     b.innerHTML = `<span class="cor" style="background:${bi.cor}">${bi.emoji}</span>${bi.nome}`;
     b.onclick = () => { setBiome(i); if (!USES_BIOME.has(state.tool)) setTool('bioma'); };
     box.appendChild(b);

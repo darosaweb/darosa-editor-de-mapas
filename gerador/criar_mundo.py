@@ -88,8 +88,14 @@ def main():
         f'Desenho: {info["largura"]} x {info["altura"]} blocos, centro em X 0 Z 0; nível do mar {info["nivelMar"]}',
         f'Spawn: X {info["spawn"][0]} Y {info["spawn"][1]} Z {info["spawn"][2]} ({info.get("spawn_origem", "")})',
         f'Borda do mundo: centro {info["borda_centro"]}, tamanho {info["borda_tamanho"]} blocos',
-        f'Vilas: {sum(v["ok"] for v in vilas)} de {len(vilas)} construídas'
-        + ''.join(f'\n  - {v["estrutura"]} em X {v["x"]} Z {v["z"]}: {"ok" if v["ok"] else v["resposta"]}' for v in vilas),
+        (f'Parede invisível (barreira) na linha da borda: X {info["parede"]["x"]}, Z {info["parede"]["z"]}, '
+         f'altura {info["parede"]["y"][0]} a {info["parede"]["y"][1]}' if info.get('parede') else 'Sem parede na borda'),
+        f'Vilas: {sum(v["ok"] for v in vilas)} de {len(vilas)} bem encaixadas (conferidas bloco a bloco)'
+        + ''.join(f'\n  - {v["estrutura"]} em X {v["x"]} Z {v["z"]}: '
+                  + ('ok' if v['ok'] else ('⚠ ' if v.get('colocada') else '✗ '))
+                  + (f'{v["checagem"]["caminhos"]} caminhos, {v["checagem"]["voando"]} voando, '
+                     f'{v["checagem"]["enterrados"]} enterrados' if v.get('colocada') else v['resposta'])
+                  for v in vilas),
         '',
         'Conteúdo (contado nos chunks prontos):',
         *[f'  {k}: {v}' for k, v in resumo.items() if k != 'biomas (células)'],
@@ -103,7 +109,7 @@ def main():
           if mundo_novo and info.get('nether') else []),
         'Comandos no servidor depois de instalar:',
         f'  setworldspawn {info["spawn"][0]} {info["spawn"][1]} {info["spawn"][2]}',
-        f'  worldborder center {info["borda_centro"][0]} {info["borda_centro"][1]}',
+        f'  worldborder center {info["borda_centro"][0]}.0 {info["borda_centro"][1]}.0',
         f'  worldborder set {info["borda_tamanho"]}',
         '',
         f'Tempo total: {time.time() - t0:.0f}s',
