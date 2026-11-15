@@ -2,7 +2,7 @@
 // 1) foto  2) ajustar os 4 cantos da folha  3) cada cor vira um bioma  4) relevo automático.
 // Tudo roda no navegador; a foto não sai do aparelho.
 import { BIOMES, BIOME_INDEX } from './biomes.js';
-import { WorldMap, fbm, planaltoBadlands } from './map.js';
+import { WorldMap, fbm, perfilBioma, fundoDoMar } from './map.js';
 
 const IGNORAR = -1;      // contornos, letras, sombras: viram o bioma vizinho
 const MONTANHA = -2;     // vira montanha (o bioma é o que estiver em volta)
@@ -361,22 +361,42 @@ function montarMapa(st, opcoes) {
   const rb = Math.max(3, Math.round(W / 40));
   borrar(campo, W, H, rb); borrar(campo, W, H, rb);
   const badlands = B('badlands'), rio = B('river');
+  // relevo de cada bioma (o mesmo do pincel mágico), misturado devagar na divisa entre biomas:
+  // cada bioma tem um "peso" borrado, e a altura é a média dos relevos pesada por ele
+  const terraRelevo = new Float32Array(n), somaPeso = new Float32Array(n);
+  const rMistura = Math.max(4, Math.round(W / 64));
+  const presentes = [...new Set(bio)];
+  for (const b of presentes) {
+    if (BIOMES[b].agua) continue;
+    const peso = new Float32Array(n);
+    for (let i = 0; i < n; i++) peso[i] = bio[i] === b ? 1 : 0;
+    borrar(peso, W, H, rMistura);
+    const id = BIOMES[b].id;
+    for (let i = 0; i < n; i++) {
+      if (peso[i] < 0.01 || agua(i)) continue;
+      const p = perfilBioma(id, i % W, (i / W) | 0, seed);
+      terraRelevo[i] += peso[i] * (p === null ? 4 : p);
+      somaPeso[i] += peso[i];
+    }
+  }
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x;
     let h;
     if (bio[i] === rio) {
       h = sea - (dTerra[i] <= 1 ? 2 : 3);                    // leito do rio sempre igual
     } else if (agua(i)) {
-      h = sea - Math.min(14, 1 + dTerra[i] * 0.6);           // mar: mesma rampa para os 3 tipos de oceano
-    } else if (BIOMES[bio[i]].rente && campo[i] < 0.05) {
-      // pântano / manguezal: no nível da água, com poças
-      h = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
-    } else if (bio[i] === badlands && campo[i] < 0.05) {
-      h = sea + 1 + Math.min(planaltoBadlands(x, y, seed), dAgua[i] * 2.5);   // platôs e desfiladeiros
+      // mar: fundo ondulado igual para os 3 tipos de oceano, com rampa suave a partir da costa
+      h = sea - Math.min(fundoDoMar(x, y, seed), 1 + dTerra[i] * 0.6);
     } else {
-      const d = Math.min(dAgua[i], 24);
-      h = sea + 1 + d * 0.45 + (fbm(x / 40, y / 40, seed, 4) - 0.5) * 10 * Math.min(1, d / 8);
-      if (campo[i] > 0) h += 150 * Math.pow(campo[i], 1.3) * (0.85 + 0.3 * fbm(x / 35, y / 35, seed + 31, 3));
+      const rel = somaPeso[i] > 0 ? terraRelevo[i] / somaPeso[i] : 4;
+      // perto da água o relevo vai baixando até a praia (sem paredão na costa)
+      const costa = Math.min(1, dAgua[i] / 10), suave = costa * costa * (3 - 2 * costa);
+      h = rel < 0 ? sea + rel : sea + 1 + rel * suave;
+      if (campo[i] > 0) {
+        // a montanha também desce até a água, numa encosta mais longa (sem paredão na beira do mar)
+        const cm = Math.min(1, dAgua[i] / 30), encosta = cm * cm * (3 - 2 * cm);
+        h += 150 * Math.pow(campo[i], 1.3) * (0.85 + 0.3 * fbm(x / 35, y / 35, seed + 31, 3)) * encosta;
+      }
     }
     m.height[i] = Math.min(260, h);
     m.biome[i] = bio[i];

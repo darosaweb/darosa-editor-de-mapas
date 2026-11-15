@@ -37,8 +37,10 @@ BARRIER = 'minecraft:barrier'
 CAVE_CHANCE = {'nenhuma': 0.0, 'poucas': 0.12, 'normal': 0.26, 'muitas': 0.45}
 RIO_FUNDO = 3                # profundidade do leito dos rios (constante)
 MANCHA_MIN = 150             # manchas de bioma menores que isso (em colunas) somem na vizinhança
-VILA_RAIO_PLANO = 36         # terreno nivelado em volta do marcador da vila
-VILA_RAIO_SUAVE = 64         # ...e suavizado até aqui
+VILA_RAIO_PLANO = 48         # terreno nivelado em volta do marcador da vila
+VILA_RAIO_SUAVE = 80         # ...e suavizado até aqui
+VILA_PROCURA = 64            # se tiver água em volta, procura até essa distância um lugar com mais terra
+VILA_AREA = 60               # raio usado para medir quanta terra firme tem em volta da vila
 PAREDE_Y = (45, 90)          # parede invisível (barreira) na linha da borda do mundo
 CAVE_MIN_Y = -59             # não escava a camada de bedrock
 CAVE_TETO = 5                # blocos de rocha preservados embaixo do chão (terra)
@@ -174,6 +176,49 @@ def suavizar_agua(w, h, heights, biomes, sea):
         if mar[i]:
             hs[i] = min(sea - 2, suave[i])
     return [round(v) for v in hs]
+
+
+def _terra_em_volta(w, h, heights, biomes, sea, cx, cz, raio=VILA_AREA, passo=4):
+    """Fração de terra firme num círculo (fora do desenho conta como água)."""
+    terra = total = 0
+    for dz in range(-raio, raio + 1, passo):
+        for dx in range(-raio, raio + 1, passo):
+            if dx * dx + dz * dz > raio * raio:
+                continue
+            total += 1
+            x, z = cx + dx, cz + dz
+            if 0 <= x < w and 0 <= z < h and heights[z * w + x] >= sea and biomes[z * w + x] not in AQUATIC:
+                terra += 1
+    return terra / max(1, total)
+
+
+def ajustar_vilas(w, h, heights, biomes, sea, vilas):
+    """Vila do Minecraft é grande: se o marcador ficou perto de água, procura ali perto um lugar com mais terra.
+    Devolve a lista de vilas (coordenadas do desenho) com 'movida' em blocos."""
+    novas = []
+    for v in vilas:
+        x0, z0 = v['x'], v['z']
+        atual = _terra_em_volta(w, h, heights, biomes, sea, x0, z0)
+        melhor = (atual, x0, z0)
+        if atual < 0.95:
+            for dz in range(-VILA_PROCURA, VILA_PROCURA + 1, 8):
+                for dx in range(-VILA_PROCURA, VILA_PROCURA + 1, 8):
+                    d = math.hypot(dx, dz)
+                    if d > VILA_PROCURA:
+                        continue
+                    x, z = x0 + dx, z0 + dz
+                    if not (0 <= x < w and 0 <= z < h) or heights[z * w + x] < sea or biomes[z * w + x] in AQUATIC:
+                        continue
+                    frac = _terra_em_volta(w, h, heights, biomes, sea, x, z)
+                    # prefere ficar perto de onde foi marcada: cada 10 blocos de distância "custam" 2%
+                    if frac - d * 0.002 > melhor[0] - math.hypot(melhor[1] - x0, melhor[2] - z0) * 0.002 + 0.03:
+                        melhor = (frac, x, z)
+        frac, x, z = melhor
+        # o estilo da vila vem do bioma onde foi marcada (se for terra), mesmo que ela tenha sido movida
+        b0 = biomes[z0 * w + x0] if 0 <= x0 < w and 0 <= z0 < h else None
+        novas.append({'x': x, 'z': z, 'movida': round(math.hypot(x - x0, z - z0)), 'terra': round(frac * 100),
+                      'bioma_marcado': b0 if b0 and b0 not in AQUATIC else None})
+    return novas
 
 
 def nivelar_vilas(w, h, heights, biomes, sea, vilas):
@@ -609,7 +654,14 @@ def main():
         t_aj = time.time()
         biomes = limpar_manchas(w, h, biomes)
         heights = suavizar_agua(w, h, heights, biomes, p['nivelMar'])
-        heights = nivelar_vilas(w, h, heights, biomes, p['nivelMar'], (p.get('marcadores') or {}).get('vilas') or [])
+        marc = p.get('marcadores') or {}
+        if marc.get('vilas'):
+            marc['vilas'] = ajustar_vilas(w, h, heights, biomes, p['nivelMar'], marc['vilas'])
+            p['marcadores'] = marc
+            for v in marc['vilas']:
+                if v['movida']:
+                    print(f'  vila movida {v["movida"]} blocos para longe da água (agora {v["terra"]}% de terra em volta)')
+        heights = nivelar_vilas(w, h, heights, biomes, p['nivelMar'], marc.get('vilas') or [])
         print(f'  ajustes: manchas de bioma, rios, mar e terreno das vilas ({time.time() - t_aj:.1f}s)')
     borda = max(w, h) + 32
     # borda do mundo centrada em 0.0: dentro dela ficam as colunas -borda/2 .. borda/2 - 1
@@ -666,8 +718,9 @@ def main():
         if hh < sea or bb in AQUATIC:
             print(f'  aviso: a vila em X {wx} Z {wz} ficou na água; ignorada')
             continue
-        vilas.append({'x': wx, 'y': hh + 1, 'z': wz, 'bioma': bb,
-                      'estrutura': f'minecraft:village_{VILA_POR_BIOMA.get(bb, "plains")}'})
+        estilo_bioma = v.get('bioma_marcado') or bb
+        vilas.append({'x': wx, 'y': hh + 1, 'z': wz, 'bioma': estilo_bioma, 'movida': v.get('movida', 0),
+                      'estrutura': f'minecraft:village_{VILA_POR_BIOMA.get(estilo_bioma, "plains")}'})
     info = {
         'projeto': p.get('nome'), 'largura': w, 'altura': h, 'nivelMar': sea,
         'desenho_x': [world.ox, world.ox + w - 1], 'desenho_z': [world.oz, world.oz + h - 1],

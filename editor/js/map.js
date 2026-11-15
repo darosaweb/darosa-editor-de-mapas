@@ -39,6 +39,58 @@ export function planaltoBadlands(x, y, seed) {
   return base + degrau * t * t * (3 - 2 * t);
 }
 
+const suaveDegrau = t => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+// Profundidade do fundo do mar (positiva), igual para oceano normal, quente e congelado:
+// ondulações largas e algumas valas, para não ficar um piso liso nem ter degraus entre os tipos.
+export function fundoDoMar(x, y, seed) {
+  const base = 10 + fbm(x / 90, y / 90, seed + 71, 3) * 9;
+  const vala = Math.abs(fbm(x / 70, y / 70, seed + 72, 3) * 2 - 1);
+  return base + (vala < 0.06 ? 6 * (1 - vala / 0.06) : 0);
+}
+
+// Relevo de cada bioma: altura em relação ao nível do mar (negativa = debaixo d'água).
+// Inspirado no Minecraft normal. null = bioma sem relevo próprio.
+export function perfilBioma(id, x, y, seed) {
+  const f = (escala, s, oit = 3) => fbm(x / escala, y / escala, seed + s, oit);
+  switch (id) {
+    case 'minecraft:plains': return 2 + f(80, 101) * 7;
+    case 'minecraft:snowy_plains': return 2 + f(90, 102) * 6;
+    case 'minecraft:meadow': return 10 + f(60, 103) * 22;
+    case 'minecraft:forest':
+    case 'minecraft:birch_forest': return 4 + f(55, 104) * 14;
+    case 'minecraft:dark_forest': return 4 + f(45, 105) * 12;
+    case 'minecraft:dappled_forest': return 5 + f(50, 106) * 16;
+    case 'minecraft:pale_garden': return 6 + f(50, 107) * 12;
+    case 'minecraft:cherry_grove': return 18 + f(55, 108) * 34;
+    case 'minecraft:taiga': return 6 + f(50, 109) * 20;
+    case 'minecraft:snowy_taiga': return 8 + f(50, 110) * 22;
+    case 'minecraft:jungle': {                                 // morrinhos irregulares
+      const crista = 1 - Math.abs(f(35, 111, 4) * 2 - 1);
+      return 5 + crista * 26;
+    }
+    case 'minecraft:desert': {                                 // dunas compridas
+      const onda = Math.sin((x * 0.6 + y * 0.8) / 9 + f(60, 112) * 7) * 0.5 + 0.5;
+      return 3 + onda * 6 + f(70, 113) * 6;
+    }
+    case 'minecraft:savanna': {                                // planura com platôs de topo reto
+      const plato = suaveDegrau((f(90, 114) - 0.6) / 0.06);
+      return 3 + f(80, 115) * 6 + plato * 22;
+    }
+    case 'minecraft:mushroom_fields': return 3 + f(50, 116) * 9;
+    case 'minecraft:stony_peaks': return 70 + f(60, 117) * 90;
+    case 'minecraft:beach': return 1 + f(40, 118) * 2;
+    case 'minecraft:badlands': return planaltoBadlands(x, y, seed);
+    case 'minecraft:swamp':
+    case 'minecraft:mangrove_swamp': return -0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;   // alagadiço
+    case 'minecraft:river': return -3;                         // leito constante
+    case 'minecraft:ocean':
+    case 'minecraft:warm_ocean':
+    case 'minecraft:frozen_ocean': return -fundoDoMar(x, y, seed);
+    default: return null;
+  }
+}
+
 const clampY = v => (v < MIN_Y ? MIN_Y : v > MAX_Y ? MAX_Y : v);
 
 export class WorldMap {
@@ -228,19 +280,16 @@ export class WorldMap {
               // rio: leito na mesma profundidade em todo lugar (rebaixa e também enche buracos, fora do mar fundo)
               const alvo = sea - bio.profundidade;
               if (H[i] > alvo || H[i] > sea - 8) H[i] += (alvo - H[i]) * Math.min(1, fall * 0.8);
-            } else if (bio.agua) {
-              const alvo = sea - bio.profundidade;
-              if (H[i] > alvo) H[i] += (alvo - H[i]) * fall * 0.35;
-            } else if (bio.id === 'minecraft:badlands') {
-              // terras áridas: platôs em degraus e desfiladeiros
-              const alvo = sea + planaltoBadlands(x, y, seed);
-              H[i] += (alvo - H[i]) * fall * 0.35;
-            } else if (bio.rente) {
-              // alagadiço: o chão fica em volta do nível da água, com poças
-              const alvo = sea - 0.6 + (fbm(x / 9, y / 9, seed + 77, 2) - 0.5) * 4;
-              H[i] += (alvo - H[i]) * fall * 0.35;
-            } else if (H[i] < sea + 2) {
-              H[i] += (sea + 2 - H[i]) * fall * 0.35;
+            } else {
+              const perfil = perfilBioma(bio.id, x, y, seed);
+              if (perfil !== null) {
+                // cada bioma tem o seu relevo (dunas, colinas, platôs, fundo do mar…);
+                // montanhas feitas à mão (bem mais altas que o relevo do bioma) não são achatadas
+                const alvo = sea + perfil;
+                if (bio.agua || H[i] < alvo + 15) H[i] += (alvo - H[i]) * fall * 0.35;
+              } else if (H[i] < sea + 2) {
+                H[i] += (sea + 2 - H[i]) * fall * 0.35;
+              }
             }
           }
           break;

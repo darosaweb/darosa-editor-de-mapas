@@ -119,6 +119,19 @@ export class MapView {
     // marcadores: vilas e ponto de nascimento
     const dpr = this.dpr || 1;
     const mk = m.markers;
+    // tamanho real de cada vila (as ruas chegam a uns 64 blocos do centro)
+    ctx.save();
+    for (const v of mk.vilas) {
+      ctx.beginPath();
+      ctx.arc(this.panX + v.x * z, this.panY + v.z * z, 64 * z, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 240, 200, 0.18)';
+      ctx.fill();
+      ctx.setLineDash([6 * dpr, 5 * dpr]);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.stroke();
+    }
+    ctx.restore();
     for (const v of mk.entradas) this.drawMarker(v.x, v.z, '🕳️', m.isWater(v.x, v.z), dpr);
     for (const v of mk.vilas) this.drawMarker(v.x, v.z, '🏘️', m.isWater(v.x, v.z), dpr);
     if (mk.nascer) this.drawMarker(mk.nascer.x, mk.nascer.z, '🏠', m.isWater(mk.nascer.x, mk.nascer.z), dpr);

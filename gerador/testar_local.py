@@ -64,7 +64,7 @@ VEGETACAO = ['#minecraft:leaves', '#minecraft:logs', '#minecraft:flowers', '#min
              'minecraft:vine', 'minecraft:bamboo', 'minecraft:cactus', 'minecraft:leaf_litter',
              'minecraft:moss_carpet', 'minecraft:pale_moss_carpet', 'minecraft:pale_hanging_moss',
              'minecraft:mangrove_roots', 'minecraft:bee_nest', 'minecraft:snow']
-VILA_LIMPAR = 64          # raio (blocos) da área limpa em volta da vila
+VILA_LIMPAR = 96          # raio (blocos) da área limpa em volta da vila (vilas chegam a ~90 blocos do centro)
 VILA_ALTURA = 44          # do chão até onde limpar
 
 
@@ -109,30 +109,49 @@ class LeitorBlocos:
         return b[((y & 15) << 8) | ((z & 15) << 4) | (x & 15)] if b else 'minecraft:air'
 
 
-VAZIO = {'minecraft:air', 'minecraft:cave_air', 'minecraft:water'}
-NAO_ENTERRA = VAZIO | {'minecraft:short_grass', 'minecraft:tall_grass', 'minecraft:snow', 'minecraft:fern'}
+AR = {'minecraft:air', 'minecraft:cave_air'}
+# "enterrado" = terreno de verdade por cima do caminho (não conta lanterna, flor, base de casa…)
+TERRENO = ('stone', 'dirt', 'grass_block', 'sand', 'gravel', 'deepslate', 'granite', 'diorite', 'andesite',
+           'tuff', 'mud', 'podzol', 'mycelium', 'coarse_dirt', 'snow_block', 'terracotta', 'calcite', '_ore')
 
 
-def conferir_vila(leitor, v, raio=80):
-    """Conta caminhos da vila voando (sem chão embaixo / em cima de árvore) ou enterrados (com bloco em cima)."""
-    caminhos = voando = enterrados = sinos = 0
+def conferir_vila(leitor, v, raio=90):
+    """Confere as ruas da vila: quantas ficaram sobre a água, sobre árvores, no ar ou enterradas no terreno."""
+    deserto = 'desert' in v['estrutura']
+    rua = 'minecraft:smooth_sandstone' if deserto else 'minecraft:dirt_path'
+    # no deserto as casas também são de arenito liso: só conta o que está na altura do chão (as ruas)
+    faixa = range(v['y'] - 4, v['y'] + 2) if deserto else range(v['y'] - 25, v['y'] + 30)
+    c = {'caminhos': 0, 'sobre_agua': 0, 'sobre_arvore': 0, 'no_ar': 0, 'enterrados': 0, 'sinos': 0}
     for x in range(v['x'] - raio, v['x'] + raio + 1):
         for z in range(v['z'] - raio, v['z'] + raio + 1):
             for y in range(v['y'] - 25, v['y'] + 30):
                 b = leitor.bloco(x, y, z)
                 if b == 'minecraft:bell':
-                    sinos += 1
-                if b != 'minecraft:dirt_path':
+                    c['sinos'] += 1
+                if b != rua or y not in faixa:
                     continue
-                caminhos += 1
                 baixo, cima = leitor.bloco(x, y - 1, z), leitor.bloco(x, y + 1, z)
-                if baixo in VAZIO or 'leaves' in baixo or baixo.endswith('_log'):
-                    voando += 1
-                elif cima not in NAO_ENTERRA:
-                    enterrados += 1
-    ruins = voando + enterrados
-    ok = caminhos > 0 and ruins <= 0.1 * caminhos
-    return {'ok': ok, 'caminhos': caminhos, 'voando': voando, 'enterrados': enterrados, 'sinos': sinos}
+                if deserto and cima not in AR:
+                    continue          # parede/chão de casa, não é rua
+                c['caminhos'] += 1
+                if baixo == 'minecraft:water':
+                    c['sobre_agua'] += 1
+                elif 'leaves' in baixo or baixo.endswith('_log'):
+                    c['sobre_arvore'] += 1
+                elif baixo in AR:
+                    c['no_ar'] += 1
+                elif any(t in cima for t in TERRENO):
+                    # só conta se for uma camada fina de terreno (1 a 3 blocos): defeito que aparece no jogo.
+                    # Camada grossa = parte de dentro de construção (base do poço etc.), ninguém vê.
+                    k = 1
+                    while k <= 4 and any(t in leitor.bloco(x, y + k, z) for t in TERRENO):
+                        k += 1
+                    if k <= 4:
+                        c['enterrados'] += 1
+    ruins = c['sobre_arvore'] + c['no_ar'] + c['enterrados']
+    n = max(1, c['caminhos'])
+    c['ok'] = c['caminhos'] > 0 and c['sinos'] > 0 and ruins <= 0.08 * n and c['sobre_agua'] <= 0.1 * n
+    return c
 
 
 def forcar_carregar(r, dim, x0, x1, z0, z1):
@@ -218,8 +237,9 @@ def main(saida, mundo_novo=False):
             chk = conferir_vila(leitor, v) if v['colocada'] else {'ok': False}
             v['checagem'] = chk
             v['ok'] = v['colocada'] and chk['ok']
-            detalhe = (f'{chk.get("caminhos", 0)} caminhos, {chk.get("voando", 0)} voando, '
-                       f'{chk.get("enterrados", 0)} enterrados, {chk.get("sinos", 0)} sino(s)') if v['colocada'] else v['resposta']
+            detalhe = (f'{chk["caminhos"]} trechos de rua: {chk["sobre_agua"]} sobre a água, '
+                       f'{chk["sobre_arvore"]} sobre árvore, {chk["no_ar"]} no ar, {chk["enterrados"]} enterrados, '
+                       f'{chk["sinos"]} sino(s)') if v['colocada'] else v['resposta']
             print(f'    vila {v["estrutura"]} em X {v["x"]} Z {v["z"]}: {"✓" if v["ok"] else "⚠"} {detalhe}')
     info['vilas_resultado'] = resultado_vilas
 

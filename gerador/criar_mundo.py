@@ -92,9 +92,12 @@ def main():
          f'altura {info["parede"]["y"][0]} a {info["parede"]["y"][1]}' if info.get('parede') else 'Sem parede na borda'),
         f'Vilas: {sum(v["ok"] for v in vilas)} de {len(vilas)} bem encaixadas (conferidas bloco a bloco)'
         + ''.join(f'\n  - {v["estrutura"]} em X {v["x"]} Z {v["z"]}: '
-                  + ('ok' if v['ok'] else ('⚠ ' if v.get('colocada') else '✗ '))
-                  + (f'{v["checagem"]["caminhos"]} caminhos, {v["checagem"]["voando"]} voando, '
-                     f'{v["checagem"]["enterrados"]} enterrados' if v.get('colocada') else v['resposta'])
+                  + ('ok: ' if v['ok'] else ('⚠ ' if v.get('colocada') else '✗ '))
+                  + (f'{v["checagem"]["caminhos"]} trechos de rua: {v["checagem"]["sobre_agua"]} sobre a água, '
+                     f'{v["checagem"]["sobre_arvore"]} sobre árvore, {v["checagem"]["no_ar"]} no ar, '
+                     f'{v["checagem"]["enterrados"]} enterrados'
+                     + (f' (vila movida {v["movida"]} blocos para longe da água)' if v.get('movida') else '')
+                     if v.get('colocada') else v['resposta'])
                   for v in vilas),
         '',
         'Conteúdo (contado nos chunks prontos):',
