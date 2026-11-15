@@ -331,8 +331,10 @@ export class WorldMap {
     this.markDirty(x0, y0, x1, y1);
   }
 
-  // Balde: pinta toda a área conectada que tem o mesmo bioma
-  fillBiome(sx, sy, newB) {
+  // Balde: pinta toda a área conectada que tem o mesmo bioma.
+  // Com "relevo automático" (magico), a área ganha o relevo do bioma novo, igual ao pincel,
+  // chegando aos poucos perto da borda para não fazer degrau com os vizinhos.
+  fillBiome(sx, sy, newB, magico = false) {
     const B = this.biome, w = this.w, h = this.h;
     const old = B[this.idx(sx, sy)];
     if (old === newB) return;
@@ -354,7 +356,50 @@ export class WorldMap {
     }
     this.backupRect(minx, miny, maxx, maxy);
     for (const i of cells) B[i] = newB;
+    if (magico) this.reliefFill(cells, seen, newB);
     this.markDirty(minx, miny, maxx, maxy);
+  }
+
+  // relevo do bioma numa área inteira (cells), com rampa de TRANSICAO blocos a partir da borda
+  reliefFill(cells, dentro, b) {
+    const TRANSICAO = 12;
+    const H = this.height, w = this.w, h = this.h, sea = this.seaLevel, seed = this.seed;
+    const bio = BIOMES[b];
+    // distância até a borda da área (blocos vizinhos de fora); a beira do mapa não conta como borda
+    const dist = new Uint8Array(w * h).fill(255);
+    let fila = [];
+    for (const i of cells) {
+      const x = i % w, y = (i / w) | 0;
+      if ((x > 0 && !dentro[i - 1]) || (x < w - 1 && !dentro[i + 1]) ||
+          (y > 0 && !dentro[i - w]) || (y < h - 1 && !dentro[i + w])) { dist[i] = 1; fila.push(i); }
+    }
+    for (let d = 1; d < TRANSICAO && fila.length; d++) {
+      const prox = [];
+      for (const i of fila) {
+        const x = i % w;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
+          if (j < 0 || j >= w * h || !dentro[j] || dist[j] !== 255) continue;
+          dist[j] = d + 1; prox.push(j);
+        }
+      }
+      fila = prox;
+    }
+    for (const i of cells) {
+      const t = Math.min(1, dist[i] / TRANSICAO), peso = t * t * (3 - 2 * t);
+      const x = i % w, y = (i / w) | 0;
+      if (bio.id === 'minecraft:river') {
+        const alvo = sea - bio.profundidade;
+        if (H[i] > alvo || H[i] > sea - 8) H[i] += (alvo - H[i]) * peso;
+      } else {
+        const perfil = perfilBioma(bio.id, x, y, seed);
+        if (perfil !== null) {
+          const alvo = sea + perfil;
+          if (bio.agua || H[i] < alvo + 15) H[i] += (alvo - H[i]) * peso;   // montanhas feitas à mão ficam
+        } else if (H[i] < sea + 2) {
+          H[i] += (sea + 2 - H[i]) * peso;
+        }
+      }
+    }
   }
 
   setSeaLevel(v) {

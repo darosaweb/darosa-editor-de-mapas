@@ -224,7 +224,7 @@ function startPaint(p) {
   }
   if (state.tool === 'balde') {
     if (!inside(p)) return;
-    map.beginStroke(); map.fillBiome(p.x | 0, p.y | 0, state.bioma); map.endStroke();
+    map.beginStroke(); map.fillBiome(p.x | 0, p.y | 0, state.bioma, state.magico); map.endStroke();
     updateUndoButtons();
     return;
   }
