@@ -238,6 +238,9 @@ function startPaint(p) {
 function endPaint() {
   if (!painting) return false;
   painting = null;
+  // no fim do traço de bioma/rio, a passagem para os vizinhos fica suave (sem paredes) e os rios ganham margens
+  const r = map.stroke && map.stroke.rect;
+  if (r && (state.tool === 'rio' || (state.tool === 'bioma' && state.magico))) map.suavizarTransicoes(r.x0, r.y0, r.x1, r.y1);
   const pushed = map.endStroke();
   updateUndoButtons();
   return pushed;
@@ -597,6 +600,15 @@ $('numMar').onchange = () => {
 $('rngExagero').oninput = () => { v3d.exagero = $('rngExagero').value / 10; v3d.needDraw = true; };
 $('chkRelevo').onchange = () => { view.relevo = $('chkRelevo').checked; view.updateImage(true); };
 $('chkGrade').onchange = () => { view.grade = $('chkGrade').checked; };
+
+// ---------- suavizar o mapa todo ----------
+$('btnSuavizar').onclick = () => {
+  map.beginStroke();
+  const mudou = map.suavizarTransicoes();
+  map.endStroke();
+  updateUndoButtons();
+  avisar(mudou ? '✨ Pronto! Passagens entre biomas e margens dos rios suavizadas' : 'O mapa já estava suave');
+};
 
 // ---------- quantidade de cavernas ----------
 let cavernasMostradas = null;

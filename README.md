@@ -18,6 +18,8 @@ veja a prévia em 3D, e um gerador transforma o desenho num **mundo jogável** (
   terra acima da água, cinza vira montanha, praias na costa. Contornos e letras são apagados sozinhos.
   Tudo roda no navegador: a foto não sai do aparelho.
 - **Pincéis de bioma** (24 biomas vanilla, incluindo Jardim pálido, Manguezal e Floresta salpicada (outono), com cores, emojis e legenda) e **balde** para pintar áreas inteiras.
+  Cada bioma ganha o seu relevo; a passagem entre biomas vira rampa suave (sem paredes) e a terra desce em vale até os rios.
+  O botão **✨ Suavizar o mapa todo** faz isso de uma vez num mapa já pronto.
 - **Pincéis de terreno**: subir, descer, montanha, rio, alisar e nivelar; tamanho e força ajustáveis.
   A **montanha** usa o dobro do tamanho do pincel e faz morros largos e suaves (picos acima de 200 com facilidade);
   o **rio** deixa o leito sempre na mesma profundidade.

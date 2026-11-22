@@ -119,6 +119,7 @@ h2 small { text-transform: none; letter-spacing: 0; font-weight: normal; }
 .biomas.apagado { opacity: .4; }
 
 .cavernas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+#btnSuavizar { width: 100%; }
 .cavernas button { padding: 6px 2px; font-size: 13px; min-width: 0; }
 
 .linha { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }

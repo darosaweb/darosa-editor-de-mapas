@@ -93,6 +93,53 @@ export function perfilBioma(id, x, y, seed) {
 
 const clampY = v => (v < MIN_Y ? MIN_Y : v > MAX_Y ? MAX_Y : v);
 
+// Distância (em blocos, aproximada em 8 direções) de cada célula passável até a semente mais próxima.
+// Células não passáveis ficam Infinity; acima de max também.
+function distancia(W, H, max, passavel, ehSemente) {
+  const n = W * H, d = new Float32Array(n).fill(Infinity), D = Math.SQRT2;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const k = y * W + x;
+    if (ehSemente(x, y, k)) d[k] = 0.5;
+  }
+  const relaxa = (k, j, c) => { if (d[j] + c < d[k]) d[k] = d[j] + c; };
+  for (let volta = 0; volta < 2; volta++) {   // duas idas e vindas bastam para contornar rios e lagos
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = y * W + x; if (!passavel[k]) continue;
+      if (x > 0) relaxa(k, k - 1, 1);
+      if (y > 0) { relaxa(k, k - W, 1); if (x > 0) relaxa(k, k - W - 1, D); if (x < W - 1) relaxa(k, k - W + 1, D); }
+    }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+      const k = y * W + x; if (!passavel[k]) continue;
+      if (x < W - 1) relaxa(k, k + 1, 1);
+      if (y < H - 1) { relaxa(k, k + W, 1); if (x < W - 1) relaxa(k, k + W + 1, D); if (x > 0) relaxa(k, k + W - 1, D); }
+    }
+  }
+  for (let k = 0; k < n; k++) if (d[k] > max) d[k] = Infinity;
+  return d;
+}
+
+// Média numa caixa de raio R contando só as células marcadas em m (as outras não puxam a média).
+function borrarTerra(a, m, W, H, R) {
+  const tmpS = new Float64Array(W * H), tmpC = new Float64Array(W * H), out = new Float32Array(W * H);
+  const linhaS = new Float64Array(Math.max(W, H) + 1), linhaC = new Float64Array(Math.max(W, H) + 1);
+  for (let y = 0; y < H; y++) {            // horizontal
+    for (let x = 0; x < W; x++) { const k = y * W + x; linhaS[x + 1] = linhaS[x] + (m[k] ? a[k] : 0); linhaC[x + 1] = linhaC[x] + m[k]; }
+    for (let x = 0; x < W; x++) {
+      const l = Math.max(0, x - R), r = Math.min(W, x + R + 1), k = y * W + x;
+      tmpS[k] = linhaS[r] - linhaS[l]; tmpC[k] = linhaC[r] - linhaC[l];
+    }
+  }
+  for (let x = 0; x < W; x++) {            // vertical
+    for (let y = 0; y < H; y++) { const k = y * W + x; linhaS[y + 1] = linhaS[y] + tmpS[k]; linhaC[y + 1] = linhaC[y] + tmpC[k]; }
+    for (let y = 0; y < H; y++) {
+      const t = Math.max(0, y - R), b = Math.min(H, y + R + 1), k = y * W + x;
+      const c = linhaC[b] - linhaC[t];
+      out[k] = c > 0 ? (linhaS[b] - linhaS[t]) / c : a[k];
+    }
+  }
+  return out;
+}
+
 export class WorldMap {
   constructor(w, h, seaLevel = 63) {
     this.w = w; this.h = h;
@@ -156,6 +203,9 @@ export class WorldMap {
   }
   backupRect(x0, y0, x1, y1) {
     const st = this.stroke; if (!st) return;
+    const r = st.rect;   // área mexida no traço todo (para suavizar no fim)
+    st.rect = r ? { x0: Math.min(r.x0, x0), y0: Math.min(r.y0, y0), x1: Math.max(r.x1, x1), y1: Math.max(r.y1, y1) }
+                : { x0, y0, x1, y1 };
     const tw = Math.ceil(this.w / TILE);
     for (let ty = Math.floor(y0 / TILE); ty <= Math.floor(y1 / TILE); ty++)
       for (let tx = Math.floor(x0 / TILE); tx <= Math.floor(x1 / TILE); tx++) {
@@ -356,50 +406,107 @@ export class WorldMap {
     }
     this.backupRect(minx, miny, maxx, maxy);
     for (const i of cells) B[i] = newB;
-    if (magico) this.reliefFill(cells, seen, newB);
+    if (magico) {
+      this.reliefFill(cells, newB);
+      this.suavizarTransicoes(minx, miny, maxx, maxy);   // a passagem para os vizinhos fica suave
+    }
     this.markDirty(minx, miny, maxx, maxy);
   }
 
-  // relevo do bioma numa área inteira (cells), com rampa de TRANSICAO blocos a partir da borda
-  reliefFill(cells, dentro, b) {
-    const TRANSICAO = 12;
-    const H = this.height, w = this.w, h = this.h, sea = this.seaLevel, seed = this.seed;
+  // relevo do bioma numa área inteira (cells); a passagem para os vizinhos é feita por suavizarTransicoes
+  reliefFill(cells, b) {
+    const H = this.height, w = this.w, sea = this.seaLevel, seed = this.seed;
     const bio = BIOMES[b];
-    // distância até a borda da área (blocos vizinhos de fora); a beira do mapa não conta como borda
-    const dist = new Uint8Array(w * h).fill(255);
-    let fila = [];
     for (const i of cells) {
-      const x = i % w, y = (i / w) | 0;
-      if ((x > 0 && !dentro[i - 1]) || (x < w - 1 && !dentro[i + 1]) ||
-          (y > 0 && !dentro[i - w]) || (y < h - 1 && !dentro[i + w])) { dist[i] = 1; fila.push(i); }
-    }
-    for (let d = 1; d < TRANSICAO && fila.length; d++) {
-      const prox = [];
-      for (const i of fila) {
-        const x = i % w;
-        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
-          if (j < 0 || j >= w * h || !dentro[j] || dist[j] !== 255) continue;
-          dist[j] = d + 1; prox.push(j);
-        }
-      }
-      fila = prox;
-    }
-    for (const i of cells) {
-      const t = Math.min(1, dist[i] / TRANSICAO), peso = t * t * (3 - 2 * t);
       const x = i % w, y = (i / w) | 0;
       if (bio.id === 'minecraft:river') {
         const alvo = sea - bio.profundidade;
-        if (H[i] > alvo || H[i] > sea - 8) H[i] += (alvo - H[i]) * peso;
+        if (H[i] > alvo || H[i] > sea - 8) H[i] = alvo;
       } else {
         const perfil = perfilBioma(bio.id, x, y, seed);
         if (perfil !== null) {
           const alvo = sea + perfil;
-          if (bio.agua || H[i] < alvo + 15) H[i] += (alvo - H[i]) * peso;   // montanhas feitas à mão ficam
+          if (bio.agua || H[i] < alvo + 15) H[i] = alvo;   // montanhas feitas à mão ficam
         } else if (H[i] < sea + 2) {
-          H[i] += (sea + 2 - H[i]) * peso;
+          H[i] = sea + 2;
         }
       }
     }
+  }
+
+  // Deixa o terreno andável perto do retângulo (x0..x1, y0..y1):
+  //  - na divisa entre dois biomas de terra, rampa suave em vez de parede (ou de valeta);
+  //  - perto dos rios, as margens descem aos poucos até a água (vale), em vez de paredões.
+  // Oceano não entra na conta (a costa já tem o seu próprio ajuste).
+  suavizarTransicoes(x0 = 0, y0 = 0, x1 = this.w - 1, y1 = this.h - 1) {
+    const R = 12;              // raio do borrão (2 passadas => rampa de até ~48 blocos)
+    const FAIXA = 2 * R;       // até onde a divisa mexe no terreno
+    const VALE = 40;           // até onde o rio rebaixa as margens
+    const E = Math.max(FAIXA, VALE);
+    // área de trabalho: o retângulo + o que pode mudar (E) + o que o borrão precisa ler (2R)
+    const M = E + 2 * R + 2;
+    const bx0 = Math.max(0, x0 - M), by0 = Math.max(0, y0 - M);
+    const bx1 = Math.min(this.w - 1, x1 + M), by1 = Math.min(this.h - 1, y1 + M);
+    const W = bx1 - bx0 + 1, Hh = by1 - by0 + 1, n = W * Hh;
+    const H = this.height, B = this.biome, sea = this.seaLevel;
+    const RIO = RIVER;
+    const terra = new Uint8Array(n), alt = new Float32Array(n), bio = new Uint8Array(n);
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+      const g = this.idx(bx0 + x, by0 + y), k = y * W + x;
+      bio[k] = B[g]; alt[k] = H[g]; terra[k] = BIOMES[B[g]].agua ? 0 : 1;
+    }
+    // só as divisas e rios que estão dentro do retângulo (mais 1) contam: assim nada muda fora da área de trabalho
+    const dentro = (x, y) => x + bx0 >= x0 - 1 && x + bx0 <= x1 + 1 && y + by0 >= y0 - 1 && y + by0 <= y1 + 1;
+
+    // ---- 1. divisas entre biomas de terra
+    const dDiv = distancia(W, Hh, FAIXA, terra, (x, y, k) => {
+      if (!terra[k] || !dentro(x, y)) return false;
+      const b = bio[k];
+      return (x > 0 && terra[k - 1] && bio[k - 1] !== b) || (x < W - 1 && terra[k + 1] && bio[k + 1] !== b) ||
+             (y > 0 && terra[k - W] && bio[k - W] !== b) || (y < Hh - 1 && terra[k + W] && bio[k + W] !== b);
+    });
+    // borrão: a água conta como a superfície do mar (a costa não vira paredão nem afunda o fundo do mar)
+    const sup = new Float32Array(n), todos = new Uint8Array(n).fill(1);
+    for (let k = 0; k < n; k++) sup[k] = terra[k] ? alt[k] : sea;
+    const liso = borrarTerra(borrarTerra(sup, todos, W, Hh, R), todos, W, Hh, R);
+    // bem na beira da água a costa fica como está (senão vira degrau com o fundo)
+    const COSTA = 8;
+    const dAgua = distancia(W, Hh, COSTA, terra, (x, y, k) => terra[k] &&
+      ((x > 0 && !terra[k - 1]) || (x < W - 1 && !terra[k + 1]) || (y > 0 && !terra[k - W]) || (y < Hh - 1 && !terra[k + W])));
+    for (let k = 0; k < n; k++) {
+      if (!terra[k] || dDiv[k] > FAIXA) continue;
+      const t = dDiv[k] / FAIXA, c = Math.min(1, dAgua[k] / COSTA);
+      const peso = (1 - t * t * (3 - 2 * t)) * c * c * (3 - 2 * c);
+      let novo = alt[k] + (liso[k] - alt[k]) * peso;
+      const piso = Math.min(alt[k], sea + 1);   // terra não afunda abaixo da água por causa do borrão
+      if (novo < piso) novo = piso;
+      alt[k] = novo;
+    }
+
+    // ---- 2. vales dos rios: a margem desce até a água, mais íngreme longe e suave perto
+    const dRio = distancia(W, Hh, VALE, terra, (x, y, k) => {
+      if (!terra[k] || !dentro(x, y)) return false;
+      return (x > 0 && bio[k - 1] === RIO) || (x < W - 1 && bio[k + 1] === RIO) ||
+             (y > 0 && bio[k - W] === RIO) || (y < Hh - 1 && bio[k + W] === RIO);
+    });
+    for (let k = 0; k < n; k++) {
+      if (!terra[k] || dRio[k] > VALE) continue;
+      const d = dRio[k];
+      const teto = sea + 1 + d * 0.5 + d * d * 0.02;   // 1 bloco acima da água na beira, ~sobe 1 a cada bloco a 12 de distância
+      if (alt[k] > teto) alt[k] = teto;
+    }
+
+    let mx0 = Infinity, my0 = Infinity, mx1 = -1, my1 = -1;
+    for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
+      const k = y * W + x, g = this.idx(bx0 + x, by0 + y);
+      if (!terra[k] || Math.abs(alt[k] - H[g]) < 0.01) continue;
+      if (mx0 === Infinity) this.backupRect(bx0, by0, bx1, by1);
+      H[g] = alt[k];
+      mx0 = Math.min(mx0, bx0 + x); mx1 = Math.max(mx1, bx0 + x);
+      my0 = Math.min(my0, by0 + y); my1 = Math.max(my1, by0 + y);
+    }
+    if (mx1 >= 0) this.markDirty(mx0, my0, mx1, my1);
+    return mx1 >= 0;
   }
 
   setSeaLevel(v) {
