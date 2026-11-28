@@ -238,9 +238,9 @@ function startPaint(p) {
 function endPaint() {
   if (!painting) return false;
   painting = null;
-  // no fim do traço de bioma/rio, a passagem para os vizinhos fica suave (sem paredes) e os rios ganham margens
+  // no fim do traço de bioma/rio/montanha, a passagem para os vizinhos fica suave (sem paredes) e os rios ganham margens
   const r = map.stroke && map.stroke.rect;
-  if (r && (state.tool === 'rio' || (state.tool === 'bioma' && state.magico))) map.suavizarTransicoes(r.x0, r.y0, r.x1, r.y1);
+  if (r && (state.tool === 'rio' || (state.magico && (state.tool === 'bioma' || state.tool === 'montanha')))) map.suavizarTransicoes(r.x0, r.y0, r.x1, r.y1);
   const pushed = map.endStroke();
   updateUndoButtons();
   return pushed;

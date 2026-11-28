@@ -118,6 +118,25 @@ function distancia(W, H, max, passavel, ehSemente) {
   return d;
 }
 
+// Pé de serra: sobe as células baixas até nenhuma ficar mais de s por bloco abaixo de uma vizinha
+// (só entre células marcadas em m). Montanha não é rebaixada; ela ganha encostas mais largas.
+function pedeSerra(a, m, W, H, s) {
+  const D = s * Math.SQRT2;
+  const puxa = (k, j, c) => { if (m[j] && a[j] - c > a[k]) a[k] = a[j] - c; };
+  for (let volta = 0; volta < 2; volta++) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = y * W + x; if (!m[k]) continue;
+      if (x > 0) puxa(k, k - 1, s);
+      if (y > 0) { puxa(k, k - W, s); if (x > 0) puxa(k, k - W - 1, D); if (x < W - 1) puxa(k, k - W + 1, D); }
+    }
+    for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+      const k = y * W + x; if (!m[k]) continue;
+      if (x < W - 1) puxa(k, k + 1, s);
+      if (y < H - 1) { puxa(k, k + W, s); if (x < W - 1) puxa(k, k + W + 1, D); if (x > 0) puxa(k, k + W - 1, D); }
+    }
+  }
+}
+
 // Média numa caixa de raio R contando só as células marcadas em m (as outras não puxam a média).
 function borrarTerra(a, m, W, H, R) {
   const tmpS = new Float64Array(W * H), tmpC = new Float64Array(W * H), out = new Float32Array(W * H);
@@ -435,28 +454,34 @@ export class WorldMap {
   }
 
   // Deixa o terreno andável perto do retângulo (x0..x1, y0..y1):
-  //  - na divisa entre dois biomas de terra, rampa suave em vez de parede (ou de valeta);
-  //  - perto dos rios, as margens descem aos poucos até a água (vale), em vez de paredões.
-  // Oceano não entra na conta (a costa já tem o seu próprio ajuste).
+  //  1. na divisa entre dois biomas de terra, rampa suave em vez de parede (ou de valeta);
+  //  2. nenhuma subida mais íngreme que INCLINACAO blocos por bloco: as montanhas ganham "pé de serra"
+  //     (no gerador, encosta de 4+ blocos vira parede de pedra);
+  //  3. perto dos rios, a terra desce em vale até a água, sem parar de repente;
+  //  4. o leito do rio é raso na beira e mais fundo no meio.
+  // Oceano não entra na conta (a costa já tem o seu próprio ajuste). Terras áridas ficam com os seus degraus.
   suavizarTransicoes(x0 = 0, y0 = 0, x1 = this.w - 1, y1 = this.h - 1) {
     const R = 12;              // raio do borrão (2 passadas => rampa de até ~48 blocos)
     const FAIXA = 2 * R;       // até onde a divisa mexe no terreno
-    const VALE = 40;           // até onde o rio rebaixa as margens
-    const E = Math.max(FAIXA, VALE);
-    // área de trabalho: o retângulo + o que pode mudar (E) + o que o borrão precisa ler (2R)
-    const M = E + 2 * R + 2;
+    const INCLINACAO = 2;      // subida máxima por bloco
+    const E = 150;             // até onde uma mudança no retângulo pode chegar (pé de serra de montanha bem alta, vale)
+    const BEIRA = 16;          // perto do fim dessa área a mudança vai sumindo (sem degrau com o resto)
+    const M = E + 2 * R + 2;   // + o que o borrão precisa ler
     const bx0 = Math.max(0, x0 - M), by0 = Math.max(0, y0 - M);
     const bx1 = Math.min(this.w - 1, x1 + M), by1 = Math.min(this.h - 1, y1 + M);
     const W = bx1 - bx0 + 1, Hh = by1 - by0 + 1, n = W * Hh;
     const H = this.height, B = this.biome, sea = this.seaLevel;
-    const RIO = RIVER;
+    const RIO = RIVER, PROF_RIO = BIOMES[RIVER].profundidade;
     const terra = new Uint8Array(n), alt = new Float32Array(n), bio = new Uint8Array(n);
+    const rio = new Uint8Array(n), serra = new Uint8Array(n);
     for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
-      const g = this.idx(bx0 + x, by0 + y), k = y * W + x;
-      bio[k] = B[g]; alt[k] = H[g]; terra[k] = BIOMES[B[g]].agua ? 0 : 1;
+      const g = this.idx(bx0 + x, by0 + y), k = y * W + x, b = BIOMES[B[g]];
+      bio[k] = B[g]; alt[k] = H[g]; terra[k] = b.agua ? 0 : 1; rio[k] = B[g] === RIO ? 1 : 0;
+      serra[k] = terra[k] && b.id !== 'minecraft:badlands' ? 1 : 0;
     }
-    // só as divisas e rios que estão dentro do retângulo (mais 1) contam: assim nada muda fora da área de trabalho
     const dentro = (x, y) => x + bx0 >= x0 - 1 && x + bx0 <= x1 + 1 && y + by0 >= y0 - 1 && y + by0 <= y1 + 1;
+    const beiraAgua = (x, y, k, m) => (x > 0 && m[k - 1]) || (x < W - 1 && m[k + 1]) || (y > 0 && m[k - W]) || (y < Hh - 1 && m[k + W]);
+    const agua = terra.map(t => 1 - t);
 
     // ---- 1. divisas entre biomas de terra
     const dDiv = distancia(W, Hh, FAIXA, terra, (x, y, k) => {
@@ -469,10 +494,8 @@ export class WorldMap {
     const sup = new Float32Array(n), todos = new Uint8Array(n).fill(1);
     for (let k = 0; k < n; k++) sup[k] = terra[k] ? alt[k] : sea;
     const liso = borrarTerra(borrarTerra(sup, todos, W, Hh, R), todos, W, Hh, R);
-    // bem na beira da água a costa fica como está (senão vira degrau com o fundo)
-    const COSTA = 8;
-    const dAgua = distancia(W, Hh, COSTA, terra, (x, y, k) => terra[k] &&
-      ((x > 0 && !terra[k - 1]) || (x < W - 1 && !terra[k + 1]) || (y > 0 && !terra[k - W]) || (y < Hh - 1 && !terra[k + W])));
+    const COSTA = 8;           // bem na beira da água a costa fica como está (senão vira degrau com o fundo)
+    const dAgua = distancia(W, Hh, COSTA, terra, (x, y, k) => terra[k] && beiraAgua(x, y, k, agua));
     for (let k = 0; k < n; k++) {
       if (!terra[k] || dDiv[k] > FAIXA) continue;
       const t = dDiv[k] / FAIXA, c = Math.min(1, dAgua[k] / COSTA);
@@ -483,27 +506,44 @@ export class WorldMap {
       alt[k] = novo;
     }
 
-    // ---- 2. vales dos rios: a margem desce até a água, mais íngreme longe e suave perto
-    const dRio = distancia(W, Hh, VALE, terra, (x, y, k) => {
-      if (!terra[k] || !dentro(x, y)) return false;
-      return (x > 0 && bio[k - 1] === RIO) || (x < W - 1 && bio[k + 1] === RIO) ||
-             (y > 0 && bio[k - W] === RIO) || (y < Hh - 1 && bio[k + W] === RIO);
-    });
+    // ---- 2. pé de serra: o lado baixo sobe até a encosta ficar com no máximo INCLINACAO por bloco
+    pedeSerra(alt, serra, W, Hh, INCLINACAO);
+
+    // ---- 3. vales dos rios: suave perto da água, depois sobe INCLINACAO por bloco até encontrar o terreno
+    const dRio = distancia(W, Hh, 1e9, terra, (x, y, k) => terra[k] && beiraAgua(x, y, k, rio));
+    const dVira = (INCLINACAO - 0.5) / 0.04;                    // onde a curva chega na inclinação máxima
+    const tVira = 1 + dVira * 0.5 + dVira * dVira * 0.02;
     for (let k = 0; k < n; k++) {
-      if (!terra[k] || dRio[k] > VALE) continue;
+      if (!terra[k] || dRio[k] === Infinity) continue;
       const d = dRio[k];
-      const teto = sea + 1 + d * 0.5 + d * d * 0.02;   // 1 bloco acima da água na beira, ~sobe 1 a cada bloco a 12 de distância
+      const teto = sea + (d < dVira ? 1 + d * 0.5 + d * d * 0.02 : tVira + (d - dVira) * INCLINACAO);
       if (alt[k] > teto) alt[k] = teto;
     }
 
+    // ---- 4. leito do rio: 1 bloco de fundura na beira, 2 no seguinte, depois a fundura normal
+    const dBeira = distancia(W, Hh, PROF_RIO + 1, rio, (x, y, k) => rio[k] && beiraAgua(x, y, k, terra));
+    for (let k = 0; k < n; k++) {
+      if (!rio[k] || alt[k] <= sea - 8) continue;               // onde já desemboca em mar fundo, fica
+      alt[k] = sea - Math.min(PROF_RIO, dBeira[k] + 0.5);
+    }
+
+    // grava, sumindo aos poucos perto do fim da área (a beira do mapa não conta)
+    const lx0 = x0 - E, lx1 = x1 + E, ly0 = y0 - E, ly1 = y1 + E;
     let mx0 = Infinity, my0 = Infinity, mx1 = -1, my1 = -1;
     for (let y = 0; y < Hh; y++) for (let x = 0; x < W; x++) {
-      const k = y * W + x, g = this.idx(bx0 + x, by0 + y);
-      if (!terra[k] || Math.abs(alt[k] - H[g]) < 0.01) continue;
+      const gx = bx0 + x, gy = by0 + y, k = y * W + x, g = this.idx(gx, gy);
+      if ((!terra[k] && !rio[k]) || Math.abs(alt[k] - H[g]) < 0.01) continue;
+      if (gx < lx0 || gx > lx1 || gy < ly0 || gy > ly1) continue;
+      let db = Infinity;
+      if (lx0 > 0) db = Math.min(db, gx - lx0);
+      if (ly0 > 0) db = Math.min(db, gy - ly0);
+      if (lx1 < this.w - 1) db = Math.min(db, lx1 - gx);
+      if (ly1 < this.h - 1) db = Math.min(db, ly1 - gy);
+      const t = Math.min(1, db / BEIRA), fade = t * t * (3 - 2 * t);
       if (mx0 === Infinity) this.backupRect(bx0, by0, bx1, by1);
-      H[g] = alt[k];
-      mx0 = Math.min(mx0, bx0 + x); mx1 = Math.max(mx1, bx0 + x);
-      my0 = Math.min(my0, by0 + y); my1 = Math.max(my1, by0 + y);
+      H[g] += (alt[k] - H[g]) * fade;
+      mx0 = Math.min(mx0, gx); mx1 = Math.max(mx1, gx);
+      my0 = Math.min(my0, gy); my1 = Math.max(my1, gy);
     }
     if (mx1 >= 0) this.markDirty(mx0, my0, mx1, my1);
     return mx1 >= 0;

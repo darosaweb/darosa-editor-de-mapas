@@ -161,13 +161,26 @@ def _media_janela(vals, w, h, r, horizontal):
     return out
 
 
+def _e_terra(heights, biomes, i, sea):
+    return biomes[i] != 'minecraft:river' and biomes[i] not in AQUATIC and heights[i] >= sea
+
+
 def suavizar_agua(w, h, heights, biomes, sea):
     """Rios com leito de profundidade constante; fundo do mar sem buracos e degraus entre os tipos de oceano."""
     hs = [float(v) for v in heights]
     rio = [b == 'minecraft:river' for b in biomes]
     for i, v in enumerate(hs):
         if rio[i] and v > sea - 10:          # rio (menos onde ele já desemboca em mar fundo)
-            hs[i] = sea - RIO_FUNDO
+            # raso na beira e fundo no meio: 1 bloco de fundura junto da terra, 2 no seguinte, depois RIO_FUNDO
+            # (leito todo fundo deixava um degrau de 4+ blocos na margem, que vira parede de pedra)
+            x, z = i % w, i // w
+            fundo = RIO_FUNDO
+            for r in range(1, RIO_FUNDO):
+                if any(0 <= x + dx < w and 0 <= z + dz < h and _e_terra(heights, biomes, (z + dz) * w + x + dx, sea)
+                       for dz in range(-r, r + 1) for dx in range(-r, r + 1)):
+                    fundo = r
+                    break
+            hs[i] = sea - fundo
     mar = [(not rio[i]) and (biomes[i] in AQUATIC or hs[i] < sea - 1) for i in range(len(hs))]
     suave = hs
     for _ in range(2):
